@@ -64,7 +64,7 @@ Physical stickers: label each board and PSU **FOLLOWER** or **LEADER**.
 
 ## Bring-up flow
 
-1. **Environment** — `env/setup_env.sh` creates conda env `lerobot` (Python 3.10), clones Hugging Face `lerobot` into `third_party/lerobot` (gitignored build artifact ok to keep), and `pip install -e ".[feetech]"` from that checkout.
+1. **Environment** — `env/setup_env.sh` creates conda env `lerobot` (Python 3.12), clones Hugging Face `lerobot` tag `v0.6.1` into `third_party/lerobot` (gitignored), and `pip install -e ".[feetech,hardware]"` from that checkout.
 2. **Find ports** — `lerobot-find-port` via `01_find_port.sh`, run twice (once per arm). Write `FOLLOWER_PORT` and `LEADER_PORT` into `config/ports.env` (Mac paths like `/dev/tty.usbmodem…`).
 3. **Motor IDs** — one motor daisy-chain connection at a time per official guide; follower script then leader script; never both boards powered.
 4. **Calibrate** — mid-range pose, then full joint sweep; separate calibration files via distinct ids.
