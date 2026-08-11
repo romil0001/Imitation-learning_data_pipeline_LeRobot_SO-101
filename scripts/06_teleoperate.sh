@@ -5,6 +5,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 load_ports
+require_follower_port_exists
+require_leader_port_exists
 
 banner_both_arms
 echo "Follower port: $FOLLOWER_PORT ($FOLLOWER_ID)"
