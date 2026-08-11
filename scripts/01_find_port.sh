@@ -11,7 +11,7 @@ echo "=== Discover FOLLOWER port ==="
 banner_follower_only
 confirm_continue
 echo "Running lerobot-find-port — disconnect FOLLOWER when prompted."
-FOLLOWER_PORT="$(lerobot-find-port | tee /dev/stderr | awk '/The port of this MotorsBus is/{print $NF}')"
+FOLLOWER_PORT="$(lerobot-find-port | tee /dev/stderr | awk '/The port of this MotorsBus is/{print $NF}' | tr -d "'")" || true
 if [[ -z "$FOLLOWER_PORT" ]]; then
   read -r -p "Paste FOLLOWER port path (e.g. /dev/tty.usbmodem...): " FOLLOWER_PORT
 fi
@@ -21,7 +21,7 @@ echo "=== Discover LEADER port ==="
 banner_leader_only
 confirm_continue
 echo "Running lerobot-find-port — disconnect LEADER when prompted."
-LEADER_PORT="$(lerobot-find-port | tee /dev/stderr | awk '/The port of this MotorsBus is/{print $NF}')"
+LEADER_PORT="$(lerobot-find-port | tee /dev/stderr | awk '/The port of this MotorsBus is/{print $NF}' | tr -d "'")" || true
 if [[ -z "$LEADER_PORT" ]]; then
   read -r -p "Paste LEADER port path (e.g. /dev/tty.usbmodem...): " LEADER_PORT
 fi

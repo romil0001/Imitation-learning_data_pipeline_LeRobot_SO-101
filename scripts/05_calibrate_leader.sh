@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 load_ports
+require_leader_port_exists
 
 banner_leader_only
 echo "Move leader to mid-range pose, then sweep each joint when prompted."

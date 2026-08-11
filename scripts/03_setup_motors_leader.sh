@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 load_ports
+require_leader_port_exists
 
 banner_leader_only
 echo "Connect ONE motor at a time as prompted (gripper → ... → shoulder_pan)."

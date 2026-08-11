@@ -66,6 +66,22 @@ load_ports() {
   return 0
 }
 
+require_follower_port_exists() {
+  if [[ ! -e "$FOLLOWER_PORT" ]]; then
+    echo "FOLLOWER_PORT '$FOLLOWER_PORT' does not exist — is the follower connected? Re-run scripts/01_find_port.sh if the device path changed." >&2
+    return 1
+  fi
+  return 0
+}
+
+require_leader_port_exists() {
+  if [[ ! -e "$LEADER_PORT" ]]; then
+    echo "LEADER_PORT '$LEADER_PORT' does not exist — is the leader connected? Re-run scripts/01_find_port.sh if the device path changed." >&2
+    return 1
+  fi
+  return 0
+}
+
 require_conda_lerobot() {
   if ! command -v conda >/dev/null 2>&1; then
     echo "conda not found. Install Miniconda, then re-run env/setup_env.sh" >&2
@@ -73,7 +89,10 @@ require_conda_lerobot() {
   fi
   # shellcheck disable=SC1091
   eval "$(conda shell.bash hook)"
-  conda activate lerobot
+  if ! conda activate lerobot; then
+    echo "Failed to activate conda env 'lerobot'. Run bash env/setup_env.sh" >&2
+    return 1
+  fi
   if ! command -v lerobot-calibrate >/dev/null 2>&1 && ! python -c "import lerobot" >/dev/null 2>&1; then
     echo "lerobot not installed in conda env 'lerobot'. Run bash env/setup_env.sh" >&2
     return 1
