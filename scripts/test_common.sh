@@ -43,4 +43,17 @@ EOF
 load_ports
 test "$FOLLOWER_PORT" = "/dev/tty.usbmodemA"
 test "$LEADER_PORT" = "/dev/tty.usbmodemB"
+
+# zmq camera json
+cat > "$TMP/camera.env" <<EOF
+CAMERA_BACKEND=zmq
+ZMQ_HOST=192.168.1.50
+ZMQ_PORT=5555
+CAMERA_NAME=front
+EOF
+CAMERA_FILE="$TMP/camera.env"
+load_camera
+json="$(robot_cameras_json)"
+echo "$json" | grep -q 'type: zmq'
+echo "$json" | grep -q '192.168.1.50'
 echo "PASS: test_common.sh"

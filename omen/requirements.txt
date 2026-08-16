@@ -1,0 +1,5 @@
+# HP Omen (Windows) — keep this env tiny (no PyTorch / LeRobot)
+pyrealsense2>=2.54
+opencv-python-headless>=4.8
+numpy>=1.26
+pyzmq>=25.0

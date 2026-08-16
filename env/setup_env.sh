@@ -31,7 +31,19 @@ else
 fi
 
 cd "$LEROBOT_DIR"
-pip install -e ".[feetech,hardware]"
+pip install -e ".[feetech,hardware,intelrealsense,core_scripts]"
+pip install pyzmq fastapi uvicorn
+
+# Apply local leader motor ID remap (7–12). Safe to re-run.
+PATCH="$ROOT/patches/so_leader_ids_7_12.patch"
+if [[ -f "$PATCH" ]]; then
+  if git -C "$LEROBOT_DIR" apply --check "$PATCH" 2>/dev/null; then
+    git -C "$LEROBOT_DIR" apply "$PATCH"
+    echo "Applied leader ID patch (motors 7–12)."
+  else
+    echo "Leader ID patch already applied or not needed."
+  fi
+fi
 
 echo
 echo "Setup complete. Next:"
