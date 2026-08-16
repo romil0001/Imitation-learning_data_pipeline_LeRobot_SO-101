@@ -1,8 +1,12 @@
-# Local hardware ports (never commit real device paths)
+# Local hardware ports / cameras (never commit real device paths)
 config/ports.env
+config/camera.env
 
 # Cloned LeRobot checkout
 third_party/lerobot/
+
+# Session logs, dumps, datasets
+outputs/
 
 # Python / OS
 __pycache__/

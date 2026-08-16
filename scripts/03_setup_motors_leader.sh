@@ -8,6 +8,7 @@ load_ports
 require_leader_port_exists
 
 banner_leader_only
+echo "Leader IDs (custom): gripper=12 → wrist_roll=11 → wrist_flex=10 → elbow_flex=9 → shoulder_lift=8 → shoulder_pan=7"
 echo "Connect ONE motor at a time as prompted (gripper → ... → shoulder_pan)."
 confirm_continue
 

@@ -103,3 +103,89 @@ require_conda_lerobot() {
 confirm_continue() {
   read -r -p "Confirm hardware matches the banner above, then press Enter (Ctrl-C to abort) "
 }
+
+load_camera() {
+  local root cam
+  root="$(project_root)"
+  cam="${CAMERA_FILE:-$root/config/camera.env}"
+  if [[ ! -f "$cam" ]]; then
+    echo "Missing $cam — plug in the D405 and run scripts/07_find_cameras.sh" >&2
+    return 1
+  fi
+  # shellcheck disable=SC1090
+  set -a
+  source "$cam"
+  set +a
+  CAMERA_NAME="${CAMERA_NAME:-front}"
+  CAMERA_WIDTH="${CAMERA_WIDTH:-640}"
+  CAMERA_HEIGHT="${CAMERA_HEIGHT:-480}"
+  CAMERA_FPS="${CAMERA_FPS:-30}"
+  CAMERA_USE_DEPTH="${CAMERA_USE_DEPTH:-false}"
+  CAMERA_BACKEND="${CAMERA_BACKEND:-opencv}"
+  CAMERA_INDEX="${CAMERA_INDEX:-0}"
+  ZMQ_HOST="${ZMQ_HOST:-}"
+  ZMQ_PORT="${ZMQ_PORT:-5555}"
+  if [[ "$CAMERA_BACKEND" == "intelrealsense" ]]; then
+    if [[ -z "${CAMERA_SERIAL:-}" || "$CAMERA_SERIAL" == CHANGE_ME* ]]; then
+      echo "Set CAMERA_SERIAL in $cam (run scripts/07_find_cameras.sh)" >&2
+      return 1
+    fi
+  elif [[ "$CAMERA_BACKEND" == "zmq" ]]; then
+    if [[ -z "$ZMQ_HOST" || "$ZMQ_HOST" == CHANGE_ME* ]]; then
+      echo "Set ZMQ_HOST in $cam to the HP Omen LAN IP (ipconfig on Windows)." >&2
+      return 1
+    fi
+  elif [[ -z "${CAMERA_INDEX:-}" ]]; then
+    echo "Set CAMERA_INDEX in $cam for opencv backend" >&2
+    return 1
+  fi
+  return 0
+}
+
+# JSON fragment for --robot.cameras=...
+robot_cameras_json() {
+  local backend="${CAMERA_BACKEND:-opencv}"
+  if [[ "$backend" == "intelrealsense" ]]; then
+    local depth="${CAMERA_USE_DEPTH:-true}"
+    printf '{ %s: {type: intelrealsense, serial_number_or_name: "%s", width: %s, height: %s, fps: %s, use_depth: %s, use_rgb: true} }' \
+      "${CAMERA_NAME:-front}" \
+      "${CAMERA_SERIAL}" \
+      "${CAMERA_WIDTH:-640}" \
+      "${CAMERA_HEIGHT:-480}" \
+      "${CAMERA_FPS:-30}" \
+      "$depth"
+  elif [[ "$backend" == "zmq" ]]; then
+    printf '{ %s: {type: zmq, server_address: "%s", port: %s, camera_name: "%s"} }' \
+      "${CAMERA_NAME:-front}" \
+      "${ZMQ_HOST}" \
+      "${ZMQ_PORT:-5555}" \
+      "${CAMERA_NAME:-front}"
+  else
+    printf '{ %s: {type: opencv, index_or_path: %s, width: %s, height: %s, fps: %s} }' \
+      "${CAMERA_NAME:-front}" \
+      "${CAMERA_INDEX:-0}" \
+      "${CAMERA_WIDTH:-1280}" \
+      "${CAMERA_HEIGHT:-720}" \
+      "${CAMERA_FPS:-15}"
+  fi
+}
+
+session_log() {
+  local root
+  root="$(project_root)"
+  mkdir -p "$root/outputs"
+  printf '%s' "$root/outputs/session.log"
+}
+
+# Usage: run_logged label command [args...]
+run_logged() {
+  local label="$1"
+  shift
+  local log
+  log="$(session_log)"
+  {
+    echo
+    echo "===== $(date '+%Y-%m-%d %H:%M:%S') $label ====="
+    PYTHONUNBUFFERED=1 "$@"
+  } 2>&1 | tee -a "$log"
+}
