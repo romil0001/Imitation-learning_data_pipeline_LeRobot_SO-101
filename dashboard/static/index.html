@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>SO-101 Teleop Station</title>
+  <link rel="stylesheet" href="/static/app.css"/>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark">SO-101</span>
+      <span class="sub">Teleop Station · Mac site · no ROS</span>
+    </div>
+    <div class="pills">
+      <span id="state" class="pill idle">IDLE</span>
+      <span id="timer" class="timer">00:00.0</span>
+      <span id="omen-pill" class="pill ghost">OMEN …</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel cam">
+      <div class="panel-h">
+        <h1 id="cam-name">front</h1>
+        <span id="cam-meta" class="muted">ZMQ</span>
+      </div>
+      <div class="stage">
+        <img id="feed" src="/mjpeg" alt="D405 live"/>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="panel">
+        <div class="panel-h"><h1>Hardware</h1></div>
+        <ul class="kv" id="hw"></ul>
+      </section>
+      <section class="panel">
+        <div class="panel-h"><h1>Keys</h1><span class="muted">v1 observe</span></div>
+        <ul class="keys">
+          <li><kbd>D</kbd> check devices / refresh status</li>
+          <li><kbd>A</kbd> start episode — run <code>scripts/08_record.sh</code></li>
+          <li><kbd>B</kbd> failure — label in the LeRobot window</li>
+          <li><kbd>C</kbd> success — label in the LeRobot window</li>
+        </ul>
+        <p class="muted small">Teleop: <code>bash scripts/06_teleoperate.sh</code> in a Mac terminal. Keep the Omen publisher running.</p>
+      </section>
+    </aside>
+
+    <section class="panel logs">
+      <div class="panel-h">
+        <h1>Live log</h1>
+        <span class="muted">outputs/session.log</span>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <div id="toast" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
