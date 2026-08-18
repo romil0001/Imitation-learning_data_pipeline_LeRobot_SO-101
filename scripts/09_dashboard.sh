@@ -13,7 +13,7 @@ if load_camera; then
     echo "ZMQ: $ZMQ_HOST:${ZMQ_PORT:-5555} name=$CAMERA_NAME"
   fi
 else
-  echo "No camera.env yet — dashboard will show a blank feed until you set ZMQ_HOST."
+  echo "No camera.env yet — run: bash scripts/setup_cameras_view.sh"
 fi
 
 HOST="${DASHBOARD_HOST:-127.0.0.1}"

@@ -31,7 +31,8 @@
 4. `bash scripts/03_setup_motors_leader.sh`
 5. `bash scripts/04_calibrate_follower.sh`
 6. `bash scripts/05_calibrate_leader.sh`
-7. Copy `config/camera.env.example` → `config/camera.env`, set `ZMQ_HOST`
+7. `bash scripts/setup_cameras_view.sh` (writes `config/camera.env`, installs dashboard deps)
+8. Set `ZMQ_HOST` in `config/camera.env` to the Omen LAN IP (or `127.0.0.1` + `scripts/mock_zmq_camera.py` for local testing)
 
 ## Omen software order
 1. Miniconda installed

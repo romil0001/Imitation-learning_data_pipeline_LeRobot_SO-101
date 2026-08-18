@@ -45,7 +45,7 @@ On the Omen you only need the `omen/` folder after clone.
 4. Follower motors only → `bash scripts/02_setup_motors_follower.sh`
 5. Leader motors only → `bash scripts/03_setup_motors_leader.sh`
 6. Calibrate each arm (`04` then `05`)
-7. Copy `config/camera.env.example` → `config/camera.env` and set `ZMQ_HOST` to the Omen LAN IP
+7. `bash scripts/setup_cameras_view.sh` then set `ZMQ_HOST` in `config/camera.env` to the Omen LAN IP
 
 ## Omen setup (Windows)
 1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
