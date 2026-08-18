@@ -31,19 +31,20 @@ else
 fi
 
 cd "$LEROBOT_DIR"
-pip install -e ".[feetech,hardware,intelrealsense,core_scripts]"
+pip install -e ".[feetech,hardware,intelrealsense,core_scripts,training]"
 pip install pyzmq fastapi uvicorn
 
-# Apply local leader motor ID remap (7–12). Safe to re-run.
-PATCH="$ROOT/patches/so_leader_ids_7_12.patch"
-if [[ -f "$PATCH" ]]; then
-  if git -C "$LEROBOT_DIR" apply --check "$PATCH" 2>/dev/null; then
-    git -C "$LEROBOT_DIR" apply "$PATCH"
-    echo "Applied leader ID patch (motors 7–12)."
-  else
-    echo "Leader ID patch already applied or not needed."
+# Apply local patches (leader IDs, ZMQ RGB). Safe to re-run.
+for PATCH in "$ROOT/patches/so_leader_ids_7_12.patch" "$ROOT/patches/zmq_bgr_to_rgb.patch" "$ROOT/patches/so_follower_configure_retries.patch" "$ROOT/patches/record_save_before_reset.patch"; do
+  if [[ -f "$PATCH" ]]; then
+    if git -C "$LEROBOT_DIR" apply --check "$PATCH" 2>/dev/null; then
+      git -C "$LEROBOT_DIR" apply "$PATCH"
+      echo "Applied $(basename "$PATCH")."
+    else
+      echo "$(basename "$PATCH") already applied or not needed."
+    fi
   fi
-fi
+done
 
 echo
 echo "Setup complete. Next:"

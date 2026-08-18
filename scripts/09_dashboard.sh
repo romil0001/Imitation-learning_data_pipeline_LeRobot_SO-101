@@ -5,8 +5,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 
-echo "Local site: live camera + session log (outputs/session.log)"
-echo "Keep this running while you teleop/record in another terminal."
+echo "Operator site (v1): live D405 + hardware status + session log"
+echo "Open http://127.0.0.1:8080  — keep this running while you teleop/record."
 if load_camera; then
   echo "Camera backend: $CAMERA_BACKEND"
   if [[ "$CAMERA_BACKEND" == "zmq" ]]; then

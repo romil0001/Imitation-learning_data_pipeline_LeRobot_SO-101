@@ -1,0 +1,177 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0d10;
+  --panel: #13171d;
+  --line: #2a313c;
+  --text: #e8ecf1;
+  --muted: #8b93a2;
+  --amber: #e0b45c;
+  --ok: #3ecf8e;
+  --bad: #ee5b5b;
+  --idle: #7aa2ff;
+  --teleop: #e0b45c;
+  --rec: #ee5b5b;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: #10141a;
+}
+.brand { display: flex; flex-direction: column; gap: 2px; }
+.mark {
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-size: 13px;
+  color: var(--amber);
+}
+.sub { font-size: 12px; color: var(--muted); }
+.pills { display: flex; align-items: center; gap: 10px; }
+.pill {
+  font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.12em;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.pill.idle { color: var(--idle); border-color: #3a4d78; }
+.pill.teleop { color: var(--teleop); border-color: #6b5420; }
+.pill.recording { color: var(--rec); border-color: #6b2a2a; background: #2a1212; }
+.pill.disconnected { color: var(--muted); }
+.pill.ok { color: var(--ok); border-color: #1e5c40; }
+.pill.bad { color: var(--bad); border-color: #6b2a2a; }
+.pill.ghost { color: var(--muted); }
+.timer {
+  font: 600 20px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-width: 7ch;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.7fr);
+  grid-template-areas:
+    "cam side"
+    "logs side";
+  gap: 12px;
+  padding: 12px;
+  min-height: calc(100vh - 64px);
+}
+.cam { grid-area: cam; }
+.side { grid-area: side; display: flex; flex-direction: column; gap: 12px; }
+.logs { grid-area: logs; min-height: 220px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.panel-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.panel-h h1 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+}
+.muted { color: var(--muted); font-size: 12px; }
+.small { margin: 8px 0 0; line-height: 1.45; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #d5dbe6;
+}
+
+.stage {
+  background: #000;
+  border: 1px solid #000;
+  border-radius: 4px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+.stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.kv { list-style: none; margin: 0; padding: 0; }
+.kv li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid #1d232c;
+  font-size: 13px;
+}
+.kv li:last-child { border-bottom: 0; }
+.kv .k { color: var(--muted); }
+.kv .v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-align: right; word-break: break-all; }
+.kv .v.ok { color: var(--ok); }
+.kv .v.bad { color: var(--bad); }
+
+.keys { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.keys li { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; }
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  text-align: center;
+  border: 1px solid var(--line);
+  background: #0c0f14;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font: 700 12px ui-monospace, Menlo, monospace;
+  color: var(--amber);
+}
+
+#log {
+  margin: 0;
+  flex: 1;
+  min-height: 180px;
+  max-height: 36vh;
+  overflow: auto;
+  background: #0a0c0f;
+  border: 1px solid #1d232c;
+  border-radius: 4px;
+  padding: 10px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  color: #c9d0da;
+}
+
+#toast {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  background: #1c222c;
+  border: 1px solid var(--amber);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  max-width: 360px;
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr;
+    grid-template-areas: "cam" "side" "logs";
+  }
+}

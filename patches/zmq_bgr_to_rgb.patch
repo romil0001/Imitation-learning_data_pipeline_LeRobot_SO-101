@@ -1,0 +1,15 @@
+diff --git a/src/lerobot/cameras/zmq/camera_zmq.py b/src/lerobot/cameras/zmq/camera_zmq.py
+index cd32a11..34bce5f 100644
+--- a/src/lerobot/cameras/zmq/camera_zmq.py
++++ b/src/lerobot/cameras/zmq/camera_zmq.py
+@@ -211,6 +211,10 @@ class ZMQCamera(Camera):
+         if frame is None:
+             raise RuntimeError(f"{self} failed to decode image")
+ 
++        # cv2.imdecode returns BGR. LeRobot datasets / Rerun expect RGB (same as OpenCVCamera).
++        if self.color_mode == ColorMode.RGB:
++            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
++
+         return frame
+ 
+     @check_if_not_connected

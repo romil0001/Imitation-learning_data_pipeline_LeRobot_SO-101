@@ -51,6 +51,17 @@ load_ports() {
   set +a
   FOLLOWER_ID="${FOLLOWER_ID:-my_follower_arm}"
   LEADER_ID="${LEADER_ID:-my_leader_arm}"
+  # Feetech STS3215 position PID (written on connect). Softer P + higher D reduces jitter.
+  FOLLOWER_P="${FOLLOWER_P:-10}"
+  FOLLOWER_I="${FOLLOWER_I:-0}"
+  FOLLOWER_D="${FOLLOWER_D:-48}"
+  FOLLOWER_BUS_RETRIES="${FOLLOWER_BUS_RETRIES:-8}"
+  FOLLOWER_PID_ARGS=(
+    --robot.position_p_coefficient="$FOLLOWER_P"
+    --robot.position_i_coefficient="$FOLLOWER_I"
+    --robot.position_d_coefficient="$FOLLOWER_D"
+    --robot.num_read_retries="$FOLLOWER_BUS_RETRIES"
+  )
   if [[ -z "${FOLLOWER_PORT:-}" || -z "${LEADER_PORT:-}" ]]; then
     echo "FOLLOWER_PORT and LEADER_PORT must both be set in $ports" >&2
     return 1
@@ -95,6 +106,66 @@ require_conda_lerobot() {
   fi
   if ! command -v lerobot-calibrate >/dev/null 2>&1 && ! python -c "import lerobot" >/dev/null 2>&1; then
     echo "lerobot not installed in conda env 'lerobot'. Run bash env/setup_env.sh" >&2
+    return 1
+  fi
+  return 0
+}
+
+detect_torch_device() {
+  python - <<'PY'
+import torch
+if torch.cuda.is_available():
+    print("cuda")
+elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+    print("mps")
+else:
+    print("cpu")
+PY
+}
+
+dataset_repo_id() {
+  printf '%s/%s' "${HF_USER:-local}" "${DATASET_NAME:-so101_d405_demo}"
+}
+
+dataset_local_root() {
+  local home
+  home="${HF_LEROBOT_HOME:-$HOME/.cache/huggingface/lerobot}"
+  printf '%s/%s' "$home" "$(dataset_repo_id)"
+}
+
+dataset_episode_count() {
+  local root info
+  root="$(dataset_local_root)"
+  info="$root/meta/info.json"
+  if [[ ! -f "$info" ]]; then
+    printf '0'
+    return 0
+  fi
+  python -c "import json,sys; print(json.load(open(sys.argv[1])).get('total_episodes', 0))" "$info"
+}
+
+require_local_dataset() {
+  local root
+  root="$(dataset_local_root)"
+  if [[ ! -f "$root/meta/info.json" ]]; then
+    echo "No local dataset at $root" >&2
+    echo "Record demos first: bash scripts/08_record.sh  (aim for ~50 episodes for ACT)." >&2
+    return 1
+  fi
+  return 0
+}
+
+require_saved_episode() {
+  local n want
+  want="${1:-0}"
+  n="$(dataset_episode_count)"
+  if [[ "$n" -lt 1 ]]; then
+    echo "Dataset exists but has 0 saved episodes." >&2
+    echo "Finish the take in the record terminal: n = save, then n again after Reset. Replay only after that." >&2
+    return 1
+  fi
+  if [[ "$want" -ge "$n" ]]; then
+    echo "Episode $want does not exist yet (saved episodes: 0-$((n - 1)))." >&2
     return 1
   fi
   return 0
@@ -155,11 +226,14 @@ robot_cameras_json() {
       "${CAMERA_FPS:-30}" \
       "$depth"
   elif [[ "$backend" == "zmq" ]]; then
-    printf '{ %s: {type: zmq, server_address: "%s", port: %s, camera_name: "%s"} }' \
+    printf '{ %s: {type: zmq, server_address: "%s", port: %s, camera_name: "%s", width: %s, height: %s, fps: %s} }' \
       "${CAMERA_NAME:-front}" \
       "${ZMQ_HOST}" \
       "${ZMQ_PORT:-5555}" \
-      "${CAMERA_NAME:-front}"
+      "${CAMERA_NAME:-front}" \
+      "${CAMERA_WIDTH:-640}" \
+      "${CAMERA_HEIGHT:-480}" \
+      "${CAMERA_FPS:-15}"
   else
     printf '{ %s: {type: opencv, index_or_path: %s, width: %s, height: %s, fps: %s} }' \
       "${CAMERA_NAME:-front}" \

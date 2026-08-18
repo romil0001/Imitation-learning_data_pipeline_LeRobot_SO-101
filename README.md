@@ -65,11 +65,17 @@ Then on the Mac: `OMEN_HOST=192.168.1.50 bash scripts/pull_omen_dump.sh`
 
 ## Teleop, record, site (Mac)
 1. Omen publisher running
-2. `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080
+2. `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (operator site: camera, Omen/arm status, live log; **D** refreshes status. A/B/C are hints — start record from the terminal)
 3. Other terminal: `bash scripts/06_teleoperate.sh`
-4. Record demos: `bash scripts/08_record.sh`
+4. Record demos: `bash scripts/08_record.sh` (~50 episodes for ACT; keep cameras and task fixed)
+5. Train ACT on the **Mac**: `bash scripts/10_train_act.sh` (uses Apple MPS; never the 4 GB Omen)
+6. Autonomous eval: Omen publisher + follower only → `bash scripts/11_eval_act.sh`
 
 LeRobot’s ZMQ camera stores **RGB JPEGs**. 16-bit depth is only in the optional Omen dump, not in the dataset unless you add a custom camera type later.
+
+ACT (Action Chunking Transformer) is imitation learning: it copies your teleop demos. Same scene, same `TASK` string, same camera config at record and eval. Checkpoints land in `outputs/train/act_so101_d405_demo/checkpoints/`.
+
+Official: https://huggingface.co/docs/lerobot/en/il_robots
 
 ## Quick start
 See `docs/checklist.md`.
