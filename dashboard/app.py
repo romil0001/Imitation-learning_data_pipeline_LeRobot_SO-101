@@ -1,4 +1,4 @@
-"""Local site: live D405 JPEG + teleop/record log. Run on the Mac."""
+"""Local site: live D405 + birdseye JPEGs + teleop/record log. Run on the Mac."""
 
 from __future__ import annotations
 
@@ -15,10 +15,12 @@ import zmq
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, StreamingResponse
 
+from zmq_jpeg import jpegs_from_zmq_payload
+
 ROOT = Path(__file__).resolve().parents[1]
 SESSION_LOG = ROOT / "outputs" / "session.log"
 
-_latest_jpeg = b""
+_latest_jpegs: dict[str, bytes] = {}
 _jpeg_lock = threading.Lock()
 _stop = threading.Event()
 
@@ -37,8 +39,8 @@ def load_camera_env() -> dict[str, str]:
     return out
 
 
-def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
-    global _latest_jpeg
+def jpeg_loop_zmq(host: str, port: int) -> None:
+    global _latest_jpegs
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.SUB)
     sock.setsockopt_string(zmq.SUBSCRIBE, "")
@@ -53,20 +55,16 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
         except Exception:
             time.sleep(0.2)
             continue
-        images = data.get("images") or {}
-        b64 = images.get(camera_name) or (next(iter(images.values())) if images else None)
-        if not b64:
+        decoded = jpegs_from_zmq_payload(data)
+        if not decoded:
             continue
-        import base64
-
-        raw = base64.b64decode(b64)
         with _jpeg_lock:
-            _latest_jpeg = raw
+            _latest_jpegs.update(decoded)
     sock.close(0)
 
 
 def jpeg_loop_opencv(index: int, width: int, height: int, fps: int) -> None:
-    global _latest_jpeg
+    global _latest_jpegs
     cap = cv2.VideoCapture(index)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -80,7 +78,7 @@ def jpeg_loop_opencv(index: int, width: int, height: int, fps: int) -> None:
         ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
         if ok:
             with _jpeg_lock:
-                _latest_jpeg = buf.tobytes()
+                _latest_jpegs["front"] = buf.tobytes()
         time.sleep(delay)
     cap.release()
 
@@ -94,19 +92,27 @@ HTML = """<!doctype html>
     :root { color-scheme: dark; }
     body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #111; color: #eee; }
     header { padding: 12px 16px; background: #1b1b1b; border-bottom: 1px solid #333; }
-    main { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(280px, 1fr); gap: 12px; padding: 12px; }
+    main { display: grid; grid-template-columns: minmax(320px, 2fr) minmax(280px, 1fr); gap: 12px; padding: 12px; }
+    .cams { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     img { width: 100%; background: #000; border: 1px solid #333; }
+    h2 { margin: 0 0 8px; font-size: 16px; }
     pre { height: 70vh; overflow: auto; background: #0b0b0b; border: 1px solid #333; padding: 8px; font-size: 12px; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } .cams { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <header>SO-101 · live camera · command log</header>
   <main>
-    <section>
-      <h2>Camera</h2>
-      <img src="/mjpeg" alt="live"/>
-    </section>
+    <div class="cams">
+      <section>
+        <h2>front</h2>
+        <img src="/mjpeg/front" alt="front"/>
+      </section>
+      <section>
+        <h2>birdseye</h2>
+        <img src="/mjpeg/birdseye" alt="birdseye"/>
+      </section>
+    </div>
     <section>
       <h2>Log</h2>
       <pre id="log">waiting for outputs/session.log …</pre>
@@ -145,11 +151,11 @@ def api_log() -> str:
     return text[-80_000:]
 
 
-def mjpeg_iter():
+def mjpeg_iter(name: str):
     boundary = b"--frame"
     while True:
         with _jpeg_lock:
-            frame = _latest_jpeg
+            frame = _latest_jpegs.get(name, b"")
         if not frame:
             blank = np.zeros((240, 320, 3), dtype=np.uint8)
             ok, buf = cv2.imencode(".jpg", blank)
@@ -159,8 +165,13 @@ def mjpeg_iter():
 
 
 @app.get("/mjpeg")
-def mjpeg():
-    return StreamingResponse(mjpeg_iter(), media_type="multipart/x-mixed-replace; boundary=frame")
+def mjpeg_front_alias():
+    return StreamingResponse(mjpeg_iter("front"), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/mjpeg/{name}")
+def mjpeg_named(name: str):
+    return StreamingResponse(mjpeg_iter(name), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
 def main() -> None:
@@ -170,13 +181,12 @@ def main() -> None:
     args = p.parse_args()
     env = load_camera_env()
     backend = env.get("CAMERA_BACKEND", "zmq")
-    name = env.get("CAMERA_NAME", "front")
     if backend == "zmq":
         host = env.get("ZMQ_HOST", "")
         port = int(env.get("ZMQ_PORT", "5555"))
         if not host or host.startswith("CHANGE_ME"):
             raise SystemExit("Set ZMQ_HOST in config/camera.env to the Omen LAN IP")
-        t = threading.Thread(target=jpeg_loop_zmq, args=(host, port, name), daemon=True)
+        t = threading.Thread(target=jpeg_loop_zmq, args=(host, port), daemon=True)
     else:
         t = threading.Thread(
             target=jpeg_loop_opencv,

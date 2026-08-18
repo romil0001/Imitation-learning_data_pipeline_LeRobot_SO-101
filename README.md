@@ -9,12 +9,12 @@ Official arm guide: https://huggingface.co/docs/lerobot/en/so101
 | Machine | Role |
 |---------|------|
 | **Mac** | Leader + follower USB, `lerobot-teleoperate` / `lerobot-record`, dataset, local site |
-| **HP Omen (Windows)** | D405 USB 3 host only. Tiny RealSense → JPEG → ZMQ publisher. No PyTorch, no full LeRobot |
+| **HP Omen (Windows)** | D405 USB 3 + overhead USB webcam. Tiny RealSense/webcam → JPEG → ZMQ publisher. No PyTorch, no full LeRobot |
 
 Librealsense on macOS usually cannot claim the D405. Put the camera on the Omen (USB 3), keep the arms on the Mac.
 
 ```text
-D405 USB 3  →  Omen (publish_d405.py :5555)  →  Wi-Fi  →  Mac (LeRobot + dashboard)
+D405 USB 3 + overhead webcam  →  Omen (publish_d405.py :5555)  →  Wi-Fi  →  Mac (LeRobot + dashboard)
 ```
 
 ## Motor IDs
@@ -45,13 +45,16 @@ On the Omen you only need the `omen/` folder after clone.
 4. Follower motors only → `bash scripts/02_setup_motors_follower.sh`
 5. Leader motors only → `bash scripts/03_setup_motors_leader.sh`
 6. Calibrate each arm (`04` then `05`)
-7. Copy `config/camera.env.example` → `config/camera.env` and set `ZMQ_HOST` to the Omen LAN IP
+7. Copy `config/camera.env.example` → `config/camera.env` and set `ZMQ_HOST` to the Omen LAN IP. Keep `BIRDSEYE_NAME=birdseye` so teleop/record subscribe to both keys. Set `BIRDSEYE_NAME=` empty for front-only.
 
 ## Omen setup (Windows)
 1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-2. Plug D405 into a **USB 3** port (not a USB 2 hub)
+2. Plug D405 into a **USB 3** port (not a USB 2 hub). Plug the overhead USB webcam into any USB port on the Omen.
 3. Double-click `omen/setup_omen.bat` (or run it from Anaconda Prompt)
-4. `omen/run_publish.bat`
+4. List OpenCV indices, pick the webcam (not the D405 UVC device), then publish:
+   `python omen\publish_d405.py --list-webcams`
+   `python omen\publish_d405.py --webcam-index N`
+   (`omen/run_publish.bat` still works; pass `--webcam-index N` after it)
 5. Note IPv4 from `ipconfig` (e.g. `192.168.1.50`)
 6. Allow **TCP 5555 inbound** in Windows Firewall if the Mac cannot connect
 
@@ -65,7 +68,7 @@ Then on the Mac: `OMEN_HOST=192.168.1.50 bash scripts/pull_omen_dump.sh`
 
 ## Teleop, record, site (Mac)
 1. Omen publisher running
-2. `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080
+2. `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (shows **front** and **birdseye** side by side)
 3. Other terminal: `bash scripts/06_teleoperate.sh`
 4. Record demos: `bash scripts/08_record.sh`
 

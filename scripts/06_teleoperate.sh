@@ -14,7 +14,7 @@ echo "Leader port:   $LEADER_PORT ($LEADER_ID)"
 
 CAMERA_ARGS=()
 if load_camera; then
-  echo "Camera:        $CAMERA_NAME backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-} index=${CAMERA_INDEX:-} ${CAMERA_WIDTH}x${CAMERA_HEIGHT}@${CAMERA_FPS}"
+  echo "Camera:        $CAMERA_NAME birdseye=${BIRDSEYE_NAME:-off} backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-} index=${CAMERA_INDEX:-} ${CAMERA_WIDTH}x${CAMERA_HEIGHT}@${CAMERA_FPS}"
   CAMERA_ARGS=(--robot.cameras="$(robot_cameras_json)" --display_data=true)
 else
   echo "No camera.env — teleop without camera (run scripts/07_find_cameras.sh to add D405)."

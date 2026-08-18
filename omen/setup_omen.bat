@@ -22,5 +22,9 @@ echo Setup complete. Plug D405 into USB 3, then:
 echo   conda activate omen-d405
 echo   python omen\publish_d405.py
 echo.
+echo Optional overhead webcam:
+echo   python omen\publish_d405.py --list-webcams
+echo   python omen\publish_d405.py --webcam-index N
+echo.
 echo Allow port 5555 in Windows Firewall if the Mac cannot connect.
 echo Set ZMQ_HOST on the Mac to this PC's IPv4 address (ipconfig).

@@ -20,6 +20,8 @@
 ## Two machines
 - [ ] **Mac:** leader + follower USB (motor boards can share USB 2)
 - [ ] **HP Omen:** D405 on a USB 3 SuperSpeed port (not a USB 2 hub)
+- [ ] **HP Omen:** overhead USB webcam plugged in (in addition to D405 USB 3)
+- [ ] Ran `python omen\publish_d405.py --list-webcams` and set `--webcam-index` to the webcam
 - [ ] Same Wi-Fi/LAN; Omen `ipconfig` IPv4 written into Mac `config/camera.env` as `ZMQ_HOST`
 - [ ] Windows Firewall allows inbound TCP **5555**
 - [ ] Do **not** train or run full LeRobot on the 4 GB Omen
@@ -31,7 +33,7 @@
 4. `bash scripts/03_setup_motors_leader.sh`
 5. `bash scripts/04_calibrate_follower.sh`
 6. `bash scripts/05_calibrate_leader.sh`
-7. Copy `config/camera.env.example` → `config/camera.env`, set `ZMQ_HOST`
+7. Copy `config/camera.env.example` → `config/camera.env`, set `ZMQ_HOST`. Leave `BIRDSEYE_NAME=birdseye` in `camera.env`.
 
 ## Omen software order
 1. Miniconda installed

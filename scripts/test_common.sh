@@ -56,4 +56,31 @@ load_camera
 json="$(robot_cameras_json)"
 echo "$json" | grep -q 'type: zmq'
 echo "$json" | grep -q '192.168.1.50'
+
+# zmq camera json without BIRDSEYE_NAME must stay single-camera
+echo "$json" | grep -q 'camera_name: "front"'
+if echo "$json" | grep -q birdseye; then
+  echo "FAIL: birdseye must be absent when BIRDSEYE_NAME is unset"
+  exit 1
+fi
+
+# zmq camera json with BIRDSEYE_NAME must list both cameras on the same host/port
+cat > "$TMP/camera.env" <<EOF
+CAMERA_BACKEND=zmq
+ZMQ_HOST=192.168.1.50
+ZMQ_PORT=5555
+CAMERA_NAME=front
+BIRDSEYE_NAME=birdseye
+EOF
+CAMERA_FILE="$TMP/camera.env"
+load_camera
+test "$BIRDSEYE_NAME" = "birdseye"
+json="$(robot_cameras_json)"
+echo "$json" | grep -q 'front: {type: zmq'
+echo "$json" | grep -q 'birdseye: {type: zmq'
+echo "$json" | grep -q 'camera_name: "front"'
+echo "$json" | grep -q 'camera_name: "birdseye"'
+echo "$json" | grep -q 'server_address: "192.168.1.50"'
+echo "$json" | grep -q 'port: 5555'
+
 echo "PASS: test_common.sh"

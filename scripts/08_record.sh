@@ -19,7 +19,7 @@ FPS="${CAMERA_FPS:-30}"
 banner_both_arms
 echo "Follower: $FOLLOWER_PORT ($FOLLOWER_ID)"
 echo "Leader:   $LEADER_PORT ($LEADER_ID)"
-echo "Camera:   $CAMERA_NAME backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-} index=${CAMERA_INDEX:-} depth=$CAMERA_USE_DEPTH"
+echo "Camera:   $CAMERA_NAME birdseye=${BIRDSEYE_NAME:-off} backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-} index=${CAMERA_INDEX:-} depth=$CAMERA_USE_DEPTH"
 echo "Dataset:  ${HF_USER}/${DATASET_NAME}  episodes=$NUM_EPISODES"
 echo "Task:     $TASK"
 confirm_continue

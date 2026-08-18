@@ -125,6 +125,7 @@ load_camera() {
   CAMERA_INDEX="${CAMERA_INDEX:-0}"
   ZMQ_HOST="${ZMQ_HOST:-}"
   ZMQ_PORT="${ZMQ_PORT:-5555}"
+  BIRDSEYE_NAME="${BIRDSEYE_NAME:-}"
   if [[ "$CAMERA_BACKEND" == "intelrealsense" ]]; then
     if [[ -z "${CAMERA_SERIAL:-}" || "$CAMERA_SERIAL" == CHANGE_ME* ]]; then
       echo "Set CAMERA_SERIAL in $cam (run scripts/07_find_cameras.sh)" >&2
@@ -155,11 +156,20 @@ robot_cameras_json() {
       "${CAMERA_FPS:-30}" \
       "$depth"
   elif [[ "$backend" == "zmq" ]]; then
-    printf '{ %s: {type: zmq, server_address: "%s", port: %s, camera_name: "%s"} }' \
+    local json
+    json="$(printf '{ %s: {type: zmq, server_address: "%s", port: %s, camera_name: "%s"}' \
       "${CAMERA_NAME:-front}" \
       "${ZMQ_HOST}" \
       "${ZMQ_PORT:-5555}" \
-      "${CAMERA_NAME:-front}"
+      "${CAMERA_NAME:-front}")"
+    if [[ -n "${BIRDSEYE_NAME:-}" ]]; then
+      json+="$(printf ', %s: {type: zmq, server_address: "%s", port: %s, camera_name: "%s"}' \
+        "${BIRDSEYE_NAME}" \
+        "${ZMQ_HOST}" \
+        "${ZMQ_PORT:-5555}" \
+        "${BIRDSEYE_NAME}")"
+    fi
+    printf '%s }' "$json"
   else
     printf '{ %s: {type: opencv, index_or_path: %s, width: %s, height: %s, fps: %s} }' \
       "${CAMERA_NAME:-front}" \
