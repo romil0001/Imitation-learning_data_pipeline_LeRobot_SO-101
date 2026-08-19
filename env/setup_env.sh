@@ -32,7 +32,8 @@ fi
 
 cd "$LEROBOT_DIR"
 pip install -e ".[feetech,hardware,intelrealsense,core_scripts,training]"
-pip install pyzmq fastapi uvicorn
+pip install pyzmq fastapi uvicorn pytest
+pip install -e "$ROOT"
 
 # Apply local patches (leader IDs, ZMQ RGB). Safe to re-run.
 for PATCH in "$ROOT/patches/so_leader_ids_7_12.patch" "$ROOT/patches/zmq_bgr_to_rgb.patch" "$ROOT/patches/so_follower_configure_retries.patch" "$ROOT/patches/record_save_before_reset.patch"; do
@@ -50,3 +51,4 @@ echo
 echo "Setup complete. Next:"
 echo "  conda activate lerobot"
 echo "  bash scripts/01_find_port.sh"
+echo "  python -m so101 --help"

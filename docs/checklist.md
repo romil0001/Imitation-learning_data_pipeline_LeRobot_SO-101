@@ -24,7 +24,7 @@
 - [ ] **HP Omen:** D405 on a USB 3 SuperSpeed port (not a USB 2 hub)
 - [ ] Same Wi-Fi/LAN; Omen `ipconfig` IPv4 written into Mac `config/camera.env` as `ZMQ_HOST`
 - [ ] Windows Firewall allows inbound TCP **5555**
-- [ ] Do **not** train or run full LeRobot on the 4 GB Omen (train ACT on the Mac with MPS, or a CUDA box)
+- [ ] Do **not** train on the 4 GB Omen (train ACT on the Mac with MPS)
 
 ## Mac software order
 1. `bash env/setup_env.sh`
@@ -44,6 +44,6 @@
 ## Session
 1. Mac: `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (operator site; **D** = status check)
 2. Mac: `bash scripts/06_teleoperate.sh`
-3. Mac: `bash scripts/08_record.sh` (~50 episodes for ACT; same cameras/task)
-4. Mac: `bash env/setup_env.sh` if `lerobot-train` is missing, then `bash scripts/10_train_act.sh` (MPS, hours)
-5. Mac: follower + Omen publisher → `bash scripts/11_eval_act.sh`
+3. Mac: `bash scripts/08_record.sh` (~50 episodes for ACT; same cameras/task; data in `data/datasets/`)
+4. Mac: `bash scripts/10_train_act.sh` (MPS, hours — not the Omen; holds out episodes, writes `best_val`)
+5. Mac: follower + Omen publisher → `bash scripts/11_eval_act.sh` (loads `best_val`; scored pen-to-keys grid; reset scene, then **y**/**n** each trial; train loss is not the score; logs in `outputs/eval/`)

@@ -1,0 +1,22 @@
+task: Pick pen and place it next to the keys
+timeout_s: 20
+n_trials_per_condition: 5
+success_criterion: >
+  Pen is in the keys zone, gripper is clear of the pen, and nothing was
+  knocked over.
+conditions:
+  - id: pen=left
+    pen: left
+    lighting: overhead
+    distractors: none
+    split: id
+  - id: pen=center
+    pen: center
+    lighting: overhead
+    distractors: none
+    split: id
+  - id: pen=right
+    pen: right
+    lighting: overhead
+    distractors: none
+    split: id

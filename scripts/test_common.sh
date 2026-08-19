@@ -47,6 +47,11 @@ test "$FOLLOWER_P" = "10"
 test "$FOLLOWER_D" = "48"
 echo "${FOLLOWER_PID_ARGS[*]}" | grep -q 'position_p_coefficient=10'
 
+# local dataset path (not Hugging Face cache)
+root="$(project_root)"
+DATASET_NAME=so101_d405_demo
+test "$(dataset_local_root)" = "$root/data/datasets/so101_d405_demo"
+
 # zmq camera json
 cat > "$TMP/camera.env" <<EOF
 CAMERA_BACKEND=zmq

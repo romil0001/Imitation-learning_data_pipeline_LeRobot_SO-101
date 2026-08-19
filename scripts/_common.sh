@@ -123,31 +123,27 @@ else:
 PY
 }
 
-dataset_repo_id() {
-  printf '%s/%s' "${HF_USER:-local}" "${DATASET_NAME:-so101_d405_demo}"
-}
-
 dataset_local_root() {
-  local home
-  home="${HF_LEROBOT_HOME:-$HOME/.cache/huggingface/lerobot}"
-  printf '%s/%s' "$home" "$(dataset_repo_id)"
+  local root
+  root="$(project_root)"
+  printf '%s' "$root/data/datasets/${DATASET_NAME:-so101_d405_demo}"
 }
 
 dataset_episode_count() {
   local root info
   root="$(dataset_local_root)"
-  info="$root/meta/info.json"
+  info="$root/meta.json"
   if [[ ! -f "$info" ]]; then
     printf '0'
     return 0
   fi
-  python -c "import json,sys; print(json.load(open(sys.argv[1])).get('total_episodes', 0))" "$info"
+  python -c "import json,sys; print(json.load(open(sys.argv[1])).get('episode_count', 0))" "$info"
 }
 
 require_local_dataset() {
   local root
   root="$(dataset_local_root)"
-  if [[ ! -f "$root/meta/info.json" ]]; then
+  if [[ ! -f "$root/meta.json" ]]; then
     echo "No local dataset at $root" >&2
     echo "Record demos first: bash scripts/08_record.sh  (aim for ~50 episodes for ACT)." >&2
     return 1
@@ -262,4 +258,11 @@ run_logged() {
     echo "===== $(date '+%Y-%m-%d %H:%M:%S') $label ====="
     PYTHONUNBUFFERED=1 "$@"
   } 2>&1 | tee -a "$log"
+}
+
+so101_python() {
+  local root
+  root="$(project_root)"
+  export PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"
+  python -m so101 "$@"
 }
