@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run a trained ACT policy on the follower. Omen D405 publisher must be running.
 # Leader can be unplugged. Follower 12V + USB ON.
+# Default: GDM scored protocol (y/n per trial). Unscored timed run: PROTOCOL= bash scripts/11_eval_act.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/_common.sh
@@ -10,25 +11,24 @@ load_ports
 require_follower_port_exists
 load_camera
 
-HF_USER="${HF_USER:-local}"
 DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
 JOB_NAME="${JOB_NAME:-act_${DATASET_NAME}}"
-POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/$JOB_NAME/checkpoints/last/pretrained_model}"
-TASK="${TASK:-Pick pen and place it next to the keys}"
+POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/$JOB_NAME}"
 DURATION="${DURATION:-60}"
+PROTOCOL="${PROTOCOL-$ROOT/config/eval/pen_to_keys.yaml}"
+N_TRIALS="${N_TRIALS:-}"
 
-if [[ ! -d "$POLICY_PATH" && ! -f "$POLICY_PATH/config.json" ]]; then
-  echo "No ACT checkpoint at $POLICY_PATH" >&2
+if [[ -f "$POLICY_PATH/best_val/model.pt" ]]; then
+  echo "Checkpoint: $POLICY_PATH/best_val/model.pt"
+elif [[ -f "$POLICY_PATH/last/model.pt" ]]; then
+  echo "Checkpoint: $POLICY_PATH/last/model.pt (no best_val)"
+elif [[ -f "$POLICY_PATH/model.pt" ]]; then
+  echo "Checkpoint: $POLICY_PATH/model.pt (legacy)"
+else
+  echo "No ACT checkpoint at $POLICY_PATH (expected best_val/model.pt or last/model.pt)" >&2
   echo "Train first: bash scripts/10_train_act.sh" >&2
   exit 1
 fi
-
-if ! command -v lerobot-rollout >/dev/null 2>&1; then
-  echo "lerobot-rollout missing. Re-run: bash env/setup_env.sh" >&2
-  exit 1
-fi
-
-CAMERAS_JSON="$(robot_cameras_json)"
 
 echo "============================================================"
 echo " ACT EVAL — FOLLOWER + D405 (Omen publisher)"
@@ -37,20 +37,33 @@ echo " - Leader can be OFF"
 echo " - Omen: omen\\run_publish.bat must be streaming"
 echo "============================================================"
 echo "Policy:   $POLICY_PATH"
-echo "Follower: $FOLLOWER_PORT ($FOLLOWER_ID)  PID P=$FOLLOWER_P I=$FOLLOWER_I D=$FOLLOWER_D"
+echo "Follower: $FOLLOWER_PORT ($FOLLOWER_ID)"
 echo "Camera:   $CAMERA_NAME backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-}"
-echo "Task:     $TASK"
-echo "Duration: ${DURATION}s"
+if [[ -n "$PROTOCOL" ]]; then
+  echo "Protocol: $PROTOCOL"
+  echo "Score:    y=success  n=fail after each trial (or during the run to stop early)"
+  echo "Reset:    set the pen on the taped mark, then Enter — still prompted per trial"
+  if [[ -n "$N_TRIALS" ]]; then
+    echo "Trials:   $N_TRIALS per condition (override)"
+  fi
+else
+  echo "Duration: ${DURATION}s (unscored)"
+fi
 confirm_continue
 
-run_logged eval_act lerobot-rollout \
-  --strategy.type=base \
-  --policy.path="$POLICY_PATH" \
-  --robot.type=so101_follower \
-  --robot.port="$FOLLOWER_PORT" \
-  --robot.id="$FOLLOWER_ID" \
-  "${FOLLOWER_PID_ARGS[@]}" \
-  --robot.cameras="$CAMERAS_JSON" \
-  --task="$TASK" \
-  --duration="$DURATION" \
-  --display_data=true
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+EVAL_ARGS=(
+  python -m so101 eval
+  --dataset="$DATASET_NAME"
+  --checkpoint="$POLICY_PATH"
+  --yes
+)
+if [[ -n "$PROTOCOL" ]]; then
+  EVAL_ARGS+=(--protocol="$PROTOCOL")
+  if [[ -n "$N_TRIALS" ]]; then
+    EVAL_ARGS+=(--n-trials="$N_TRIALS")
+  fi
+else
+  EVAL_ARGS+=(--duration="$DURATION")
+fi
+run_logged eval_act "${EVAL_ARGS[@]}"

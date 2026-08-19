@@ -7,6 +7,7 @@ third_party/lerobot/
 
 # Session logs, dumps, datasets
 outputs/
+data/datasets/
 
 # Python / OS
 __pycache__/
@@ -15,3 +16,4 @@ __pycache__/
 *.egg-info/
 .venv/
 .idea/
+.pytest_cache/

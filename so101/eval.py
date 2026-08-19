@@ -1,0 +1,115 @@
+"""Run a trained ACT policy on the follower. Omen D405 publisher must be up."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from so101.hardware import action_dict_from_qpos, qpos_from_obs, rgb_from_obs
+
+
+def run_eval_loop(
+    *,
+    follower: Any,
+    policy: Any,
+    camera_name: str,
+    fps: int,
+    duration_s: float,
+    max_steps: int | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.perf_counter,
+    should_stop: Callable[[], bool] | None = None,
+) -> int:
+    policy.reset()
+    t0 = now()
+    steps = 0
+    while True:
+        if max_steps is not None and steps >= max_steps:
+            break
+        if now() - t0 >= duration_s:
+            break
+        if should_stop is not None and should_stop():
+            break
+        loop_t = now()
+        obs = follower.get_observation()
+        action = policy.select_action(rgb_from_obs(obs, camera_name), qpos_from_obs(obs))
+        follower.send_action(action_dict_from_qpos(action))
+        steps += 1
+        leftover = (1.0 / fps) - (now() - loop_t)
+        if leftover > 0:
+            sleep(leftover)
+    return steps
+
+
+def eval_from_env(
+    *,
+    checkpoint: str = "",
+    dataset_name: str = "so101_d405_demo",
+    duration_s: float = 60.0,
+    confirm: bool = True,
+    protocol: str = "",
+    n_trials: int | None = None,
+    keys: Any | None = None,
+    reset_confirm: Callable[..., None] | None = None,
+    output_dir: Path | None = None,
+) -> int:
+    from so101.config import load_camera, load_ports, project_root
+    from so101.hardware import make_follower
+    from so101.keys import StdinKeys
+    from so101.models.act import ACTPolicy, find_policy_weights
+    from so101.train import detect_device
+
+    root = project_root()
+    ckpt = Path(checkpoint) if checkpoint else root / "outputs" / "train" / f"act_{dataset_name}"
+    try:
+        find_policy_weights(ckpt)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"No ACT checkpoint at {ckpt}. Train first: python -m so101 train") from exc
+    ports = load_ports()
+    cam = load_camera()
+    device = detect_device()
+    policy = ACTPolicy.load(ckpt, device=device)
+    print("EVAL: follower USB + 12V ON. Leader can be OFF. Omen publisher must be streaming.")
+    proto_path = protocol.strip()
+    if proto_path:
+        print(f"Policy {ckpt}  camera={cam.name}  {cam.width}x{cam.height}@{cam.fps}  protocol={proto_path}")
+    else:
+        print(f"Policy {ckpt}  camera={cam.name}  {cam.width}x{cam.height}@{cam.fps}  duration={duration_s}s")
+    if confirm:
+        input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
+    follower = make_follower(ports, cam, with_cameras=True)
+    follower.connect()
+    try:
+        if proto_path:
+            from so101.eval_protocol import load_protocol, run_protocol
+
+            loaded = load_protocol(proto_path)
+            run_id = time.strftime("%Y%m%d_%H%M%S")
+            run_dir = Path(output_dir) if output_dir else root / "outputs" / "eval" / ckpt.name / run_id
+            kw = dict(
+                protocol=loaded,
+                follower=follower,
+                policy=policy,
+                camera_name=cam.name,
+                fps=cam.fps,
+                run_dir=run_dir,
+                n_trials=n_trials,
+                reset_confirm=reset_confirm,
+            )
+            if keys is not None:
+                summary = run_protocol(keys=keys, **kw)
+            else:
+                with StdinKeys(allowed={"y", "n", "s", "f"}) as stdin_keys:
+                    summary = run_protocol(keys=stdin_keys, **kw)
+            return int(summary["n_success"])
+        return run_eval_loop(
+            follower=follower,
+            policy=policy,
+            camera_name=cam.name,
+            fps=cam.fps,
+            duration_s=duration_s,
+        )
+    finally:
+        follower.disconnect()

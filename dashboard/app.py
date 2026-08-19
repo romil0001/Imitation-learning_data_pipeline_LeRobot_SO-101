@@ -175,7 +175,7 @@ def last_banner() -> tuple[str | None, str | None]:
 
 
 def session_state() -> str:
-    recording = process_running("lerobot-record")
+    recording = process_running("so101 record") or process_running("lerobot-record")
     teleop = process_running("lerobot-teleoperate")
     age = time.time() - _stats["last_ts"] if _stats["last_ts"] else 1e9
     omen_up = tcp_ok(CFG["zmq_host"], int(CFG.get("zmq_port") or "5555")) if CFG["backend"] == "zmq" else age < 2
