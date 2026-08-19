@@ -28,6 +28,7 @@ def _tiny_cfg() -> ACTConfig:
         backbone="tiny",
         image_size=32,
         dropout=0.0,
+        n_action_steps=8,
     )
 
 
@@ -161,6 +162,35 @@ def test_train_two_steps_then_select_action(tmp_path: Path) -> None:
     assert np.isfinite(a).all()
     a2 = policy.select_action(img, state)
     assert a2.shape == (6,)
+
+
+def test_select_action_replans_only_when_queue_empty() -> None:
+    cfg = _tiny_cfg()
+    cfg.n_action_steps = 4
+    model = ACT(cfg)
+    stats = {
+        "state_mean": [0.0] * 6,
+        "state_std": [1.0] * 6,
+        "action_mean": [0.0] * 6,
+        "action_std": [1.0] * 6,
+    }
+    policy = ACTPolicy(model, stats, device="cpu")
+    policy.reset()
+    calls = {"n": 0}
+    orig = policy._predict_chunk
+
+    def counted(image_rgb, state):
+        calls["n"] += 1
+        return orig(image_rgb, state)
+
+    policy._predict_chunk = counted  # type: ignore[method-assign]
+    img = np.zeros((32, 32, 3), dtype=np.uint8)
+    st = np.zeros(6, dtype=np.float32)
+    for _ in range(4):
+        policy.select_action(img, st)
+    assert calls["n"] == 1
+    policy.select_action(img, st)
+    assert calls["n"] == 2
 
 
 def test_train_stats_from_train_split_only(tmp_path: Path) -> None:

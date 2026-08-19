@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-import math
+from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -32,6 +32,7 @@ class ACTConfig:
     backbone: str = "resnet18"
     image_size: int = 224
     ensemble_temp: float = 0.01
+    n_action_steps: int = 100
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -204,28 +205,26 @@ class ACTPolicy:
         self.state_std = np.asarray(stats["state_std"], dtype=np.float32)
         self.action_mean = np.asarray(stats["action_mean"], dtype=np.float32)
         self.action_std = np.asarray(stats["action_std"], dtype=np.float32)
-        self._chunks: list[np.ndarray] = []
+        self._action_queue: deque[np.ndarray] = deque()
 
     def reset(self) -> None:
-        self._chunks = []
+        self._action_queue = deque()
 
-    @torch.no_grad()
-    def select_action(self, image_rgb: np.ndarray, state: np.ndarray) -> np.ndarray:
+    def _predict_chunk(self, image_rgb: np.ndarray, state: np.ndarray) -> np.ndarray:
         img = preprocess_image(image_rgb, self.cfg.image_size, self.cfg.backbone).unsqueeze(0).to(self.device)
         st = (np.asarray(state, dtype=np.float32) - self.state_mean) / self.state_std
         st_t = torch.from_numpy(st).unsqueeze(0).to(self.device)
         pred = self.model(images=img, state=st_t)["pred_actions"][0].cpu().numpy()
-        chunk = pred * self.action_std + self.action_mean
-        self._chunks.append(chunk)
-        weighted = np.zeros(self.cfg.n_joints, dtype=np.float32)
-        wsum = 0.0
-        for age, ch in enumerate(reversed(self._chunks)):
-            w = math.exp(-self.cfg.ensemble_temp * age)
-            weighted += w * ch[0]
-            wsum += w
-        action = weighted / max(wsum, 1e-8)
-        self._chunks = [c[1:] for c in self._chunks if c.shape[0] > 1]
-        return action.astype(np.float32)
+        return pred * self.action_std + self.action_mean
+
+    @torch.no_grad()
+    def select_action(self, image_rgb: np.ndarray, state: np.ndarray) -> np.ndarray:
+        # Match LeRobot ACT: fill a queue of n_action_steps, then pop. Do not replan every frame.
+        if not self._action_queue:
+            chunk = self._predict_chunk(image_rgb, state)
+            n = min(int(self.cfg.n_action_steps), int(self.cfg.chunk_size), chunk.shape[0])
+            self._action_queue.extend(np.asarray(row, dtype=np.float32) for row in chunk[:n])
+        return np.asarray(self._action_queue.popleft(), dtype=np.float32)
 
     def save(self, directory: Path) -> None:
         directory = Path(directory)

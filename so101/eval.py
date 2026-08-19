@@ -10,6 +10,14 @@ from typing import Any
 from so101.hardware import action_dict_from_qpos, qpos_from_obs, rgb_from_obs
 
 
+def _dataset_home_qpos(root: Path, dataset_name: str) -> tuple[float, ...]:
+    from so101.dataset import SO101Dataset
+    from so101.home import mean_start_qpos
+
+    ds = SO101Dataset(root / "data" / "datasets" / dataset_name)
+    return tuple(float(x) for x in mean_start_qpos(ds))
+
+
 def run_eval_loop(
     *,
     follower: Any,
@@ -55,8 +63,11 @@ def eval_from_env(
     reset_confirm: Callable[..., None] | None = None,
     output_dir: Path | None = None,
 ) -> int:
+    from dataclasses import replace
+
     from so101.config import load_camera, load_ports, project_root
     from so101.hardware import make_follower
+    from so101.home import interpolate_to_qpos
     from so101.keys import StdinKeys
     from so101.models.act import ACTPolicy, find_policy_weights
     from so101.train import detect_device
@@ -82,10 +93,14 @@ def eval_from_env(
     follower = make_follower(ports, cam, with_cameras=True)
     follower.connect()
     try:
+        home = _dataset_home_qpos(root, dataset_name)
         if proto_path:
             from so101.eval_protocol import load_protocol, run_protocol
 
             loaded = load_protocol(proto_path)
+            if loaded.home_qpos is None:
+                loaded = replace(loaded, home_qpos=home)
+            print(f"Home qpos={list(loaded.home_qpos)}  steps={loaded.home_steps}  dt={loaded.home_dt}s")
             run_id = time.strftime("%Y%m%d_%H%M%S")
             run_dir = Path(output_dir) if output_dir else root / "outputs" / "eval" / ckpt.name / run_id
             kw = dict(
@@ -104,6 +119,8 @@ def eval_from_env(
                 with StdinKeys(allowed={"y", "n", "s", "f"}) as stdin_keys:
                     summary = run_protocol(keys=stdin_keys, **kw)
             return int(summary["n_success"])
+        print(f"Home qpos={list(home)}")
+        interpolate_to_qpos(follower, home, n_steps=80, dt=0.04, sleep=time.sleep)
         return run_eval_loop(
             follower=follower,
             policy=policy,

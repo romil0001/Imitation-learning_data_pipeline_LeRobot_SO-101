@@ -28,7 +28,7 @@ fi
 confirm_continue
 
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
-run_logged record python -m so101 record \
+run_logged record "$(conda_lerobot_python)" -m so101 record \
   --dataset="$DATASET_NAME" \
   --num-episodes="$NUM_EPISODES" \
   --task="$TASK" \

@@ -70,4 +70,19 @@ echo "$json" | grep -q '192.168.1.50'
 echo "$json" | grep -q 'width: 640'
 echo "$json" | grep -q 'height: 480'
 echo "$json" | grep -q 'fps: 15'
+
+# conda_lerobot_python prefers CONDA_PREFIX
+CONDA_PREFIX="$TMP/fakeconda"
+mkdir -p "$CONDA_PREFIX/bin"
+touch "$CONDA_PREFIX/bin/python"
+chmod +x "$CONDA_PREFIX/bin/python"
+test "$(conda_lerobot_python)" = "$CONDA_PREFIX/bin/python"
+
+# drop_active_venv removes VIRTUAL_ENV/bin from PATH
+VIRTUAL_ENV="$TMP/venv"
+mkdir -p "$VIRTUAL_ENV/bin"
+PATH="$VIRTUAL_ENV/bin:/usr/bin:/bin"
+drop_active_venv
+[[ -z "${VIRTUAL_ENV:-}" ]]
+echo "$PATH" | grep -qv "$TMP/venv/bin"
 echo "PASS: test_common.sh"
