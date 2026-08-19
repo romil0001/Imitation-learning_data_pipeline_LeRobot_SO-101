@@ -93,26 +93,72 @@ require_leader_port_exists() {
   return 0
 }
 
+# Cursor/IDE often leave a project .venv on PATH ahead of conda. Drop it so
+# `python` is the lerobot env (pyzmq, torch, Hugging Face lerobot).
+drop_active_venv() {
+  if [[ -z "${VIRTUAL_ENV:-}" ]]; then
+    return 0
+  fi
+  local venv_bin="${VIRTUAL_ENV}/bin"
+  if declare -F deactivate >/dev/null 2>&1; then
+    deactivate >/dev/null 2>&1 || true
+  fi
+  local new_path="" part rest="$PATH"
+  while [[ -n "$rest" ]]; do
+    if [[ "$rest" == *:* ]]; then
+      part="${rest%%:*}"
+      rest="${rest#*:}"
+    else
+      part="$rest"
+      rest=""
+    fi
+    if [[ "$part" != "$venv_bin" ]]; then
+      if [[ -z "$new_path" ]]; then
+        new_path="$part"
+      else
+        new_path="${new_path}:${part}"
+      fi
+    fi
+  done
+  PATH="$new_path"
+  unset VIRTUAL_ENV
+  hash -r 2>/dev/null || true
+}
+
+conda_lerobot_python() {
+  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/python" ]]; then
+    printf '%s' "${CONDA_PREFIX}/bin/python"
+  else
+    command -v python
+  fi
+}
+
 require_conda_lerobot() {
   if ! command -v conda >/dev/null 2>&1; then
     echo "conda not found. Install Miniconda, then re-run env/setup_env.sh" >&2
     return 1
   fi
+  drop_active_venv
   # shellcheck disable=SC1091
   eval "$(conda shell.bash hook)"
   if ! conda activate lerobot; then
     echo "Failed to activate conda env 'lerobot'. Run bash env/setup_env.sh" >&2
     return 1
   fi
-  if ! command -v lerobot-calibrate >/dev/null 2>&1 && ! python -c "import lerobot" >/dev/null 2>&1; then
-    echo "lerobot not installed in conda env 'lerobot'. Run bash env/setup_env.sh" >&2
+  hash -r 2>/dev/null || true
+  export PATH="${CONDA_PREFIX}/bin:${PATH}"
+  local py
+  py="$(conda_lerobot_python)"
+  if ! "$py" -c "import lerobot" >/dev/null 2>&1; then
+    echo "lerobot not installed in conda env 'lerobot' ($py). Run bash env/setup_env.sh" >&2
     return 1
   fi
+  echo "Using Python: $py"
   return 0
 }
 
 detect_torch_device() {
-  python - <<'PY'
+  "$(conda_lerobot_python)" - <<'PY'
 import torch
 if torch.cuda.is_available():
     print("cuda")
@@ -137,7 +183,7 @@ dataset_episode_count() {
     printf '0'
     return 0
   fi
-  python -c "import json,sys; print(json.load(open(sys.argv[1])).get('episode_count', 0))" "$info"
+  "$(conda_lerobot_python)" -c "import json,sys; print(json.load(open(sys.argv[1])).get('episode_count', 0))" "$info"
 }
 
 require_local_dataset() {
@@ -264,5 +310,5 @@ so101_python() {
   local root
   root="$(project_root)"
   export PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"
-  python -m so101 "$@"
+  "$(conda_lerobot_python)" -m so101 "$@"
 }

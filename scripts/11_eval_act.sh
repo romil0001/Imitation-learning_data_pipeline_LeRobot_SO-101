@@ -53,7 +53,7 @@ confirm_continue
 
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 EVAL_ARGS=(
-  python -m so101 eval
+  "$(conda_lerobot_python)" -m so101 eval
   --dataset="$DATASET_NAME"
   --checkpoint="$POLICY_PATH"
   --yes

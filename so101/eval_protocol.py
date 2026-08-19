@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 
 from so101.eval import run_eval_loop
+from so101.home import interpolate_to_qpos
 from so101.keys import KeySource
 
 SCORE_SUCCESS = frozenset({"y", "s"})
@@ -34,6 +35,9 @@ class Protocol:
     n_trials_per_condition: int
     success_criterion: str
     conditions: list[Condition]
+    home_qpos: tuple[float, ...] | None = None
+    home_steps: int = 80
+    home_dt: float = 0.04
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -41,6 +45,9 @@ class Protocol:
             "timeout_s": self.timeout_s,
             "n_trials_per_condition": self.n_trials_per_condition,
             "success_criterion": self.success_criterion,
+            "home_qpos": list(self.home_qpos) if self.home_qpos is not None else None,
+            "home_steps": self.home_steps,
+            "home_dt": self.home_dt,
             "conditions": [asdict(c) for c in self.conditions],
         }
 
@@ -71,12 +78,17 @@ def load_protocol(path: str | Path) -> Protocol:
     if not conditions:
         raise ValueError(f"Protocol {path} needs at least one condition")
     criterion = str(data.get("success_criterion") or "").strip()
+    raw_home = data.get("home_qpos")
+    home_qpos = tuple(float(x) for x in raw_home) if raw_home else None
     return Protocol(
         task=str(data["task"]),
         timeout_s=float(data["timeout_s"]),
         n_trials_per_condition=int(data["n_trials_per_condition"]),
         success_criterion=criterion,
         conditions=conditions,
+        home_qpos=home_qpos,
+        home_steps=int(data.get("home_steps", 80)),
+        home_dt=float(data.get("home_dt", 0.04)),
     )
 
 
@@ -114,7 +126,7 @@ def _default_reset_confirm(condition: Condition, trial_i: int, n_trials: int) ->
         f"(pen={condition.pen}, lighting={condition.lighting}, distractors={condition.distractors})",
         flush=True,
     )
-    print("Place the pen on the taped mark. Clear the gripper. Ready the keys zone.", flush=True)
+    print("Arm is at the demo start pose. Place the pen on the taped mark. Ready the keys zone.", flush=True)
     input("Press Enter when the scene is reset (Ctrl-C to abort) ")
 
 
@@ -176,6 +188,15 @@ def run_protocol(
     for condition in effective.conditions:
         for trial_i in range(n):
             trial_index += 1
+            if effective.home_qpos is not None:
+                print("Returning slowly to demo start pose (keep the workspace clear)…", flush=True)
+                interpolate_to_qpos(
+                    follower,
+                    effective.home_qpos,
+                    n_steps=effective.home_steps,
+                    dt=effective.home_dt,
+                    sleep=sleep,
+                )
             confirm(condition, trial_i, n)
             scored: list[bool] = []
 

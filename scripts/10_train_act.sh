@@ -38,7 +38,7 @@ echo "Keep cameras/task identical between record and eval."
 confirm_continue
 
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
-run_logged train_act python -m so101 train \
+run_logged train_act "$(conda_lerobot_python)" -m so101 train \
   --dataset="$DATASET_NAME" \
   --steps="$STEPS" \
   --batch-size="$BATCH_SIZE" \

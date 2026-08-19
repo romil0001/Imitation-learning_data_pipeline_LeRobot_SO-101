@@ -25,7 +25,7 @@ echo "Follower: $FOLLOWER_PORT  PID P=$FOLLOWER_P I=$FOLLOWER_I D=$FOLLOWER_D"
 confirm_continue
 
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
-run_logged replay python -m so101 replay \
+run_logged replay "$(conda_lerobot_python)" -m so101 replay \
   --dataset="$DATASET_NAME" \
   --episode="$EPISODE" \
   --yes

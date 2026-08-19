@@ -89,7 +89,7 @@ def _tiny_protocol_yaml(tmp_path: Path) -> Path:
 def test_load_pen_to_keys_protocol() -> None:
     proto = load_protocol(PROTOCOL_PATH)
     assert proto.task == "Pick pen and place it next to the keys"
-    assert proto.timeout_s == 20
+    assert proto.timeout_s == 60
     assert proto.n_trials_per_condition == 5
     assert "keys" in proto.success_criterion.lower()
     assert [c.id for c in proto.conditions] == ["pen=left", "pen=center", "pen=right"]
