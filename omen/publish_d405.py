@@ -1,7 +1,8 @@
 """Publish D405 wrist RGB + USB webcam overhead over ZMQ for the Mac.
 
 LeRobot on the Mac subscribes with type=zmq. Message shape:
-  {"images": {"wrist": "<base64 JPEG>", "overhead": "<base64 JPEG>"}}
+  {"images": {"wrist": "<base64 JPEG>", "overhead": "<base64 JPEG>"},
+   "depths": {"wrist": "<base64 uint16 PNG>"}}
 
 Usage (Anaconda Prompt on the Omen):
   conda activate omen-d405
@@ -110,6 +111,14 @@ def open_webcam(index: int, width: int, height: int, fps: int) -> cv2.VideoCaptu
     return cap
 
 
+def depth_png_b64(depth_u16: np.ndarray) -> str:
+    z = np.asarray(depth_u16, dtype=np.uint16)
+    ok, buf = cv2.imencode(".png", z)
+    if not ok:
+        raise RuntimeError("depth PNG encode failed")
+    return base64.b64encode(buf.tobytes()).decode("ascii")
+
+
 def jpeg_b64(bgr: np.ndarray, quality: int) -> str:
     ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     if not ok:
@@ -178,6 +187,12 @@ def main() -> int:
             flush=True,
         )
 
+    align = rs.align(rs.stream.color) if not args.no_depth else None
+    if args.no_depth:
+        print("D405 depth: off (--no-depth)", flush=True)
+    else:
+        print(f"D405 depth: on (ZMQ depths[{args.camera_name!r}], aligned to color)", flush=True)
+
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.PUB)
     sock.bind(f"tcp://{args.bind}:{args.port}")
@@ -192,11 +207,19 @@ def main() -> int:
     try:
         while True:
             frames = pipeline.wait_for_frames()
+            if align is not None:
+                frames = align.process(frames)
             color = frames.get_color_frame()
             if not color:
                 continue
             wrist_bgr = np.asanyarray(color.get_data())
             images = {args.camera_name: jpeg_b64(wrist_bgr, args.jpeg_quality)}
+            depths: dict[str, str] = {}
+            if not args.no_depth:
+                depth = frames.get_depth_frame()
+                if depth:
+                    z = np.asanyarray(depth.get_data())
+                    depths[args.camera_name] = depth_png_b64(z)
             if webcam is not None:
                 ok, web_bgr = webcam.read()
                 if ok and web_bgr is not None:
@@ -206,7 +229,9 @@ def main() -> int:
                 if last_web is None:
                     continue
                 images[args.overhead_name] = jpeg_b64(last_web, args.jpeg_quality)
-            payload = {"images": images, "ts": time.time()}
+            payload: dict[str, object] = {"images": images, "ts": time.time()}
+            if depths:
+                payload["depths"] = depths
             sock.send_string(json.dumps(payload))
 
             if dump and frame_i % max(1, args.dump_every) == 0:
@@ -215,17 +240,18 @@ def main() -> int:
                 if args.overhead_name in images:
                     over_jpg = base64.b64decode(images[args.overhead_name])
                     (dump / f"overhead_{frame_i:06d}.jpg").write_bytes(over_jpg)
-                if not args.no_depth:
-                    depth = frames.get_depth_frame()
-                    if depth:
-                        z = np.asanyarray(depth.get_data())
+                if depths:
+                    raw = base64.b64decode(depths[args.camera_name])
+                    z = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                    if z is not None:
                         cv2.imwrite(str(dump / f"depth_{frame_i:06d}.png"), z)
 
             frame_i += 1
             n += 1
             if n % 30 == 0:
                 dt = time.time() - t0
-                print(f"published {n} frames ({n / max(dt, 1e-3):.1f} fps) keys={list(images)}", flush=True)
+                keys = list(images) + (["depth:" + args.camera_name] if depths else [])
+                print(f"published {n} frames ({n / max(dt, 1e-3):.1f} fps) keys={keys}", flush=True)
     except KeyboardInterrupt:
         print("\nStopped.", flush=True)
     finally:

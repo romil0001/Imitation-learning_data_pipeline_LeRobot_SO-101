@@ -23,7 +23,7 @@
 - [ ] **Mac:** leader + follower USB (motor boards can share USB 2)
 - [ ] **HP Omen:** D405 (wrist) on USB 3; USB webcam (overhead)
 - [ ] Same Wi-Fi/LAN; Omen `ipconfig` IPv4 written into Mac `config/camera.env` as `ZMQ_HOST`
-- [ ] Mac `config/camera.env` has `CAMERA_NAMES=wrist,overhead`
+- [ ] Mac `config/camera.env` has `CAMERA_NAMES=wrist,overhead` and `CAMERA_USE_DEPTH=true`
 - [ ] Windows Firewall allows inbound TCP **5555**
 - [ ] Do **not** train on the 4 GB Omen (train ACT on the Mac with MPS)
 

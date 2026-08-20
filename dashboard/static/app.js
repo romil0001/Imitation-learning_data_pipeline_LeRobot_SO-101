@@ -64,6 +64,7 @@ async function refresh() {
     row("Omen", cam.reachable ? "reachable :5555" : "not reachable", cam.reachable),
     row("Frame age", age, cam.last_frame_age_s != null && cam.last_frame_age_s < 2),
     row("FPS", cam.fps ?? "—", cam.fps > 1),
+    row("Wrist depth", cam.depth_ok ? "streaming" : "no depth yet", cam.depth_ok),
     row("Follower", arms.follower_ok ? arms.follower_port : (arms.follower_port || "missing"), arms.follower_ok),
     row("Leader", arms.leader_ok ? arms.leader_port : (arms.leader_port || "missing"), arms.leader_ok),
     row("Last session", s.last_banner || "—"),
