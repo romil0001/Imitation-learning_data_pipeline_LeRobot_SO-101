@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -42,8 +43,7 @@ def camera_config_dict(cam: CameraSettings) -> dict[str, Any]:
     raise ValueError(f"Unknown CAMERA_BACKEND {cam.backend}")
 
 
-def make_lerobot_cameras(cam: CameraSettings) -> dict[str, Any]:
-    """Build LeRobot CameraConfig objects keyed by camera name."""
+def _one_lerobot_camera(cam: CameraSettings) -> dict[str, Any]:
     if cam.backend == "zmq":
         from lerobot.cameras.zmq import ZMQCameraConfig
 
@@ -83,9 +83,19 @@ def make_lerobot_cameras(cam: CameraSettings) -> dict[str, Any]:
     raise ValueError(f"Unknown CAMERA_BACKEND {cam.backend}")
 
 
+def make_lerobot_cameras(cameras: CameraSettings | Sequence[CameraSettings]) -> dict[str, Any]:
+    """Build LeRobot CameraConfig objects keyed by camera name."""
+    if isinstance(cameras, CameraSettings):
+        cameras = [cameras]
+    out: dict[str, Any] = {}
+    for cam in cameras:
+        out.update(_one_lerobot_camera(cam))
+    return out
+
+
 def make_follower(
     ports: PortsConfig,
-    camera: CameraSettings | None = None,
+    camera: CameraSettings | Sequence[CameraSettings] | None = None,
     *,
     with_cameras: bool = True,
 ) -> Any:
@@ -134,3 +144,7 @@ def rgb_from_obs(obs: dict[str, Any], camera_name: str) -> np.ndarray:
     if img.dtype != np.uint8:
         img = np.clip(img, 0, 255).astype(np.uint8)
     return img
+
+
+def rgbs_from_obs(obs: dict[str, Any], camera_names: Sequence[str]) -> list[np.ndarray]:
+    return [rgb_from_obs(obs, name) for name in camera_names]

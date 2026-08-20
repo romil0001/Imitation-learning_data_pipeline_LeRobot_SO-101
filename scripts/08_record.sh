@@ -18,7 +18,7 @@ EXISTING="$(dataset_episode_count)"
 banner_both_arms
 echo "Follower: $FOLLOWER_PORT ($FOLLOWER_ID)  PID P=$FOLLOWER_P I=$FOLLOWER_I D=$FOLLOWER_D"
 echo "Leader:   $LEADER_PORT ($LEADER_ID)"
-echo "Camera:   $CAMERA_NAME backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-}"
+echo "Camera:   ${CAMERA_NAMES:-$CAMERA_NAME} backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-}"
 echo "Dataset:  $(dataset_local_root)  existing=$EXISTING  target=$NUM_EPISODES"
 echo "Task:     $TASK"
 echo "Episode:  n = save, r = redo, q = quit  — keep this terminal focused"

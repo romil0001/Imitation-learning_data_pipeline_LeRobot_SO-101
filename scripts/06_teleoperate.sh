@@ -15,7 +15,7 @@ echo "Follower PID:  P=$FOLLOWER_P I=$FOLLOWER_I D=$FOLLOWER_D"
 
 CAMERA_ARGS=(--display_data=false)
 if load_camera; then
-  echo "Camera:        $CAMERA_NAME backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-} index=${CAMERA_INDEX:-} ${CAMERA_WIDTH}x${CAMERA_HEIGHT}@${CAMERA_FPS}"
+  echo "Camera:        ${CAMERA_NAMES:-$CAMERA_NAME} backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-} ${CAMERA_WIDTH}x${CAMERA_HEIGHT}@${CAMERA_FPS}"
   CAMERA_ARGS=(--robot.cameras="$(robot_cameras_json)" --display_data=true)
 else
   echo "No camera.env — teleop without camera (run scripts/07_find_cameras.sh to add D405)."

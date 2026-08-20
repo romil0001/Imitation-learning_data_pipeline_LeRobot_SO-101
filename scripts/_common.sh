@@ -230,6 +230,7 @@ load_camera() {
   source "$cam"
   set +a
   CAMERA_NAME="${CAMERA_NAME:-front}"
+  CAMERA_NAMES="${CAMERA_NAMES:-$CAMERA_NAME}"
   CAMERA_WIDTH="${CAMERA_WIDTH:-640}"
   CAMERA_HEIGHT="${CAMERA_HEIGHT:-480}"
   CAMERA_FPS="${CAMERA_FPS:-30}"
@@ -258,32 +259,41 @@ load_camera() {
 # JSON fragment for --robot.cameras=...
 robot_cameras_json() {
   local backend="${CAMERA_BACKEND:-opencv}"
+  local names_csv="${CAMERA_NAMES:-${CAMERA_NAME:-front}}"
+  local IFS=','
+  local -a names=()
+  local raw
+  for raw in $names_csv; do
+    raw="${raw#"${raw%%[![:space:]]*}"}"
+    raw="${raw%"${raw##*[![:space:]]}"}"
+    [[ -n "$raw" ]] && names+=("$raw")
+  done
+  unset IFS
+  if [[ ${#names[@]} -eq 0 ]]; then
+    names=("front")
+  fi
+  local parts=()
+  local n
   if [[ "$backend" == "intelrealsense" ]]; then
     local depth="${CAMERA_USE_DEPTH:-true}"
-    printf '{ %s: {type: intelrealsense, serial_number_or_name: "%s", width: %s, height: %s, fps: %s, use_depth: %s, use_rgb: true} }' \
-      "${CAMERA_NAME:-front}" \
-      "${CAMERA_SERIAL}" \
-      "${CAMERA_WIDTH:-640}" \
-      "${CAMERA_HEIGHT:-480}" \
-      "${CAMERA_FPS:-30}" \
-      "$depth"
+    for n in "${names[@]}"; do
+      parts+=("$(printf '%s: {type: intelrealsense, serial_number_or_name: "%s", width: %s, height: %s, fps: %s, use_depth: %s, use_rgb: true}' \
+        "$n" "${CAMERA_SERIAL}" "${CAMERA_WIDTH:-640}" "${CAMERA_HEIGHT:-480}" "${CAMERA_FPS:-30}" "$depth")")
+    done
   elif [[ "$backend" == "zmq" ]]; then
-    printf '{ %s: {type: zmq, server_address: "%s", port: %s, camera_name: "%s", width: %s, height: %s, fps: %s} }' \
-      "${CAMERA_NAME:-front}" \
-      "${ZMQ_HOST}" \
-      "${ZMQ_PORT:-5555}" \
-      "${CAMERA_NAME:-front}" \
-      "${CAMERA_WIDTH:-640}" \
-      "${CAMERA_HEIGHT:-480}" \
-      "${CAMERA_FPS:-15}"
+    for n in "${names[@]}"; do
+      parts+=("$(printf '%s: {type: zmq, server_address: "%s", port: %s, camera_name: "%s", width: %s, height: %s, fps: %s}' \
+        "$n" "${ZMQ_HOST}" "${ZMQ_PORT:-5555}" "$n" "${CAMERA_WIDTH:-640}" "${CAMERA_HEIGHT:-480}" "${CAMERA_FPS:-15}")")
+    done
   else
-    printf '{ %s: {type: opencv, index_or_path: %s, width: %s, height: %s, fps: %s} }' \
-      "${CAMERA_NAME:-front}" \
-      "${CAMERA_INDEX:-0}" \
-      "${CAMERA_WIDTH:-1280}" \
-      "${CAMERA_HEIGHT:-720}" \
-      "${CAMERA_FPS:-15}"
+    for n in "${names[@]}"; do
+      parts+=("$(printf '%s: {type: opencv, index_or_path: %s, width: %s, height: %s, fps: %s}' \
+        "$n" "${CAMERA_INDEX:-0}" "${CAMERA_WIDTH:-1280}" "${CAMERA_HEIGHT:-720}" "${CAMERA_FPS:-15}")")
+    done
   fi
+  local joined
+  joined=$(IFS=', '; echo "${parts[*]}")
+  printf '{ %s }' "$joined"
 }
 
 session_log() {

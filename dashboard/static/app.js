@@ -3,7 +3,7 @@ const timerEl = document.getElementById("timer");
 const omenEl = document.getElementById("omen-pill");
 const hwEl = document.getElementById("hw");
 const logEl = document.getElementById("log");
-const camName = document.getElementById("cam-name");
+const camName = document.getElementById("cam-name-overhead");
 const camMeta = document.getElementById("cam-meta");
 const toastEl = document.getElementById("toast");
 
@@ -48,10 +48,13 @@ async function refresh() {
   stateEl.className = `pill ${clsFor(st)}`;
   timerEl.textContent = fmtTime(s.elapsed_s);
   const cam = s.camera || {};
-  camName.textContent = cam.name || "front";
-  camMeta.textContent = cam.backend === "zmq"
-    ? `${cam.host}:${cam.port}`
-    : `opencv`;
+  const names = cam.names || [cam.name || "wrist"];
+  if (camName) camName.textContent = names.join(" + ");
+  if (camMeta) {
+    camMeta.textContent = cam.backend === "zmq"
+      ? `${cam.host}:${cam.port}`
+      : `opencv`;
+  }
   omenEl.textContent = cam.reachable ? "OMEN UP" : "OMEN DOWN";
   omenEl.className = `pill ${cam.reachable ? "ok" : "bad"}`;
 

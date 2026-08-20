@@ -53,7 +53,8 @@ class SO101Dataset:
         state = np.load(folder / "state.npy")
         action = np.load(folder / "action.npy")
         timestamps = np.load(folder / "timestamps.npy")
-        video_path = folder / f"{self.meta.camera_name}.mp4"
+        video_paths = {name: folder / f"{name}.mp4" for name in self.meta.names()}
+        first = self.meta.camera_name
         return Episode(
             index=emeta.index,
             num_frames=emeta.num_frames,
@@ -61,8 +62,9 @@ class SO101Dataset:
             state=state,
             action=action,
             timestamps=timestamps,
-            video_path=video_path,
-            camera_name=self.meta.camera_name,
+            video_path=video_paths[first],
+            camera_name=first,
+            video_paths=video_paths,
         )
 
 

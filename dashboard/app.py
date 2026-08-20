@@ -31,7 +31,8 @@ CFG: dict[str, str] = {
     "backend": "zmq",
     "zmq_host": "",
     "zmq_port": "5555",
-    "camera_name": "front",
+    "camera_name": "wrist",
+    "camera_names": "wrist,overhead",
     "opencv_index": "0",
     "width": "640",
     "height": "480",
@@ -39,6 +40,7 @@ CFG: dict[str, str] = {
 }
 
 _latest_jpeg = b""
+_latest_jpegs: dict[str, bytes] = {}
 _jpeg_lock = threading.Lock()
 _stop = threading.Event()
 _stats = {"last_ts": 0.0, "fps": 0.0, "n": 0}
@@ -62,7 +64,13 @@ def apply_camera_env() -> None:
     CFG["backend"] = env.get("CAMERA_BACKEND", "zmq")
     CFG["zmq_host"] = env.get("ZMQ_HOST", "")
     CFG["zmq_port"] = env.get("ZMQ_PORT", "5555")
-    CFG["camera_name"] = env.get("CAMERA_NAME", "front")
+    names = env.get("CAMERA_NAMES", "").strip()
+    if names:
+        CFG["camera_names"] = names
+        CFG["camera_name"] = names.split(",")[0].strip() or "wrist"
+    else:
+        CFG["camera_name"] = env.get("CAMERA_NAME", "front")
+        CFG["camera_names"] = CFG["camera_name"]
     CFG["opencv_index"] = env.get("CAMERA_INDEX", "0")
     CFG["width"] = env.get("CAMERA_WIDTH", "640")
     CFG["height"] = env.get("CAMERA_HEIGHT", "480")
@@ -98,12 +106,20 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
             time.sleep(0.2)
             continue
         images = data.get("images") or {}
-        b64 = images.get(camera_name) or (next(iter(images.values())) if images else None)
-        if not b64:
+        if not images:
             continue
-        raw = base64.b64decode(b64)
+        decoded: dict[str, bytes] = {}
+        for name, b64 in images.items():
+            try:
+                decoded[name] = base64.b64decode(b64)
+            except Exception:
+                continue
+        if not decoded:
+            continue
+        preferred = decoded.get(camera_name) or next(iter(decoded.values()))
         with _jpeg_lock:
-            _latest_jpeg = raw
+            _latest_jpegs.update(decoded)
+            _latest_jpeg = preferred
             note_frame()
     sock.close(0)
 
@@ -124,6 +140,7 @@ def jpeg_loop_opencv(index: int, width: int, height: int, fps: int) -> None:
         if ok:
             with _jpeg_lock:
                 _latest_jpeg = buf.tobytes()
+                _latest_jpegs[CFG["camera_name"]] = _latest_jpeg
                 note_frame()
         time.sleep(delay)
     cap.release()
@@ -247,6 +264,7 @@ def api_status():
         "camera": {
             "backend": CFG["backend"],
             "name": CFG["camera_name"],
+            "names": [n.strip() for n in CFG.get("camera_names", CFG["camera_name"]).split(",") if n.strip()],
             "host": host,
             "port": port,
             "reachable": tcp_ok(host, port) if CFG["backend"] == "zmq" else age is not None and age < 3,
@@ -292,14 +310,18 @@ async def log_stream():
     return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
-def mjpeg_iter():
+def mjpeg_iter(camera_name: str | None = None):
     boundary = b"--frame"
     while True:
         with _jpeg_lock:
-            frame = _latest_jpeg
+            if camera_name:
+                frame = _latest_jpegs.get(camera_name, b"")
+            else:
+                frame = _latest_jpeg
         if not frame:
+            label = camera_name or "camera"
             blank = np.zeros((270, 480, 3), dtype=np.uint8)
-            cv2.putText(blank, "waiting for D405", (70, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 180), 1)
+            cv2.putText(blank, f"waiting for {label}", (40, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 180), 1)
             ok, buf = cv2.imencode(".jpg", blank)
             frame = buf.tobytes() if ok else b""
         yield boundary + b"\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
@@ -311,6 +333,13 @@ def mjpeg():
     return StreamingResponse(mjpeg_iter(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
+@app.get("/mjpeg/{camera_name}")
+def mjpeg_named(camera_name: str):
+    return StreamingResponse(
+        mjpeg_iter(camera_name), media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--host", default="127.0.0.1")
@@ -320,7 +349,7 @@ def main() -> None:
     import uvicorn
 
     print(f"Operator site  http://{args.host}:{args.port}", flush=True)
-    print(f"Camera {CFG['backend']} {CFG['zmq_host']}:{CFG['zmq_port']} name={CFG['camera_name']}", flush=True)
+    print(f"Camera {CFG['backend']} {CFG['zmq_host']}:{CFG['zmq_port']} names={CFG.get('camera_names', CFG['camera_name'])}", flush=True)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 

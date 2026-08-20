@@ -26,21 +26,35 @@ class DatasetMeta:
     camera_height: int
     task: str
     episode_count: int
+    camera_names: tuple[str, ...] = ()
+
+    def names(self) -> tuple[str, ...]:
+        if self.camera_names:
+            return tuple(self.camera_names)
+        return (self.camera_name,)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["camera_names"] = list(self.names())
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DatasetMeta:
+        raw_names = data.get("camera_names")
+        camera_names = tuple(str(x) for x in raw_names) if raw_names else ()
+        camera_name = str(data["camera_name"]) if data.get("camera_name") else camera_names[0]
+        if not camera_names:
+            camera_names = (camera_name,)
         return cls(
             name=str(data["name"]),
             fps=int(data["fps"]),
             joint_names=list(data["joint_names"]),
-            camera_name=str(data["camera_name"]),
+            camera_name=camera_name,
             camera_width=int(data["camera_width"]),
             camera_height=int(data["camera_height"]),
             task=str(data["task"]),
             episode_count=int(data["episode_count"]),
+            camera_names=camera_names,
         )
 
 
@@ -68,8 +82,11 @@ class Episode:
     timestamps: Any
     video_path: Path
     camera_name: str
+    video_paths: dict[str, Path] | None = None
 
-    def load_frames(self) -> Any:
+    def load_frames(self, camera_name: str | None = None) -> Any:
         from so101.dataset.video import read_mp4
 
-        return read_mp4(self.video_path)
+        name = camera_name or self.camera_name
+        paths = self.video_paths or {self.camera_name: self.video_path}
+        return read_mp4(paths[name])

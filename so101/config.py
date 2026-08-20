@@ -78,7 +78,16 @@ def load_ports(path: Path | None = None) -> PortsConfig:
     )
 
 
-def load_camera(path: Path | None = None) -> CameraSettings:
+def camera_name_list(env: dict[str, str]) -> list[str]:
+    raw = env.get("CAMERA_NAMES", "").strip()
+    if raw:
+        names = [part.strip() for part in raw.split(",") if part.strip()]
+        if names:
+            return names
+    return [env.get("CAMERA_NAME", "front")]
+
+
+def load_cameras(path: Path | None = None) -> list[CameraSettings]:
     path = path or Path(project_root() / "config" / "camera.env")
     env = load_env_file(path)
     backend = env.get("CAMERA_BACKEND", "opencv")
@@ -91,9 +100,8 @@ def load_camera(path: Path | None = None) -> CameraSettings:
     if backend == "opencv" and not env.get("CAMERA_INDEX"):
         # default index 0 is allowed if key missing; example files omit it when using zmq
         pass
-    return CameraSettings(
+    shared = dict(
         backend=backend,
-        name=env.get("CAMERA_NAME", "front"),
         width=int(env.get("CAMERA_WIDTH", "640")),
         height=int(env.get("CAMERA_HEIGHT", "480")),
         fps=int(env.get("CAMERA_FPS", "15")),
@@ -103,3 +111,11 @@ def load_camera(path: Path | None = None) -> CameraSettings:
         serial=serial,
         use_depth=_as_bool(env.get("CAMERA_USE_DEPTH", "false")),
     )
+    return [CameraSettings(name=name, **shared) for name in camera_name_list(env)]
+
+
+def load_camera(path: Path | None = None) -> CameraSettings:
+    cameras = load_cameras(path)
+    if not cameras:
+        raise ValueError("No cameras configured")
+    return cameras[0]

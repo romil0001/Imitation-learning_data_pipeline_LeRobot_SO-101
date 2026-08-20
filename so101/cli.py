@@ -26,7 +26,7 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         print(stats_path.read_text())
     for i in range(ds.meta.episode_count):
         ep = ds.load_episode(i)
-        print(f"episode {i:06d}  frames={ep.num_frames}  video={ep.video_path.name}")
+        print(f"episode {i:06d}  frames={ep.num_frames}  videos={sorted((ep.video_paths or {ep.camera_name: ep.video_path}).keys())}")
     return 0
 
 

@@ -68,7 +68,16 @@ body {
   padding: 12px;
   min-height: calc(100vh - 64px);
 }
-.cam { grid-area: cam; }
+.cams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  min-width: 0;
+}
+.cam-slot { min-width: 0; }
+@media (max-width: 960px) {
+  .cams { grid-template-columns: 1fr; }
+}
 .side { grid-area: side; display: flex; flex-direction: column; gap: 12px; }
 .logs { grid-area: logs; min-height: 220px; }
 

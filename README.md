@@ -11,10 +11,11 @@ Official arm guide: https://huggingface.co/docs/lerobot/en/so101
 | **Mac** | Leader + follower USB, teleop, local `so101` record/train/eval, dashboard |
 | **HP Omen (Windows)** | D405 USB 3 host only. Tiny RealSense → JPEG → ZMQ publisher. No PyTorch |
 
-Librealsense on macOS usually cannot claim the D405. Put the camera on the Omen (USB 3), keep the arms on the Mac.
+Librealsense on macOS usually cannot claim the D405. Put the **wrist D405** and **overhead USB webcam** on the Omen (USB 3 for the D405), keep the arms on the Mac.
 
 ```text
-D405 USB 3  →  Omen (publish_d405.py :5555)  →  Wi-Fi  →  Mac (so101 + dashboard)
+D405 (wrist) USB 3  ─┐
+USB webcam (overhead)─┴→  Omen (publish_d405.py :5555)  →  Wi-Fi  →  Mac (so101 + dashboard)
 ```
 
 ## Motor IDs
@@ -45,15 +46,16 @@ On the Omen you only need the `omen/` folder after clone.
 4. Follower motors only → `bash scripts/02_setup_motors_follower.sh`
 5. Leader motors only → `bash scripts/03_setup_motors_leader.sh`
 6. Calibrate each arm (`04` then `05`)
-7. Copy `config/camera.env.example` → `config/camera.env` and set `ZMQ_HOST` to the Omen LAN IP
+7. Copy `config/camera.env.example` → `config/camera.env` and set `ZMQ_HOST` to the Omen LAN IP (`CAMERA_NAMES=wrist,overhead`)
 
 ## Omen setup (Windows)
 1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-2. Plug D405 into a **USB 3** port (not a USB 2 hub)
+2. Plug **D405** into a **USB 3** port (wrist) and the **USB webcam** (overhead)
 3. Double-click `omen/setup_omen.bat` (or run it from Anaconda Prompt)
-4. `omen/run_publish.bat`
-5. Note IPv4 from `ipconfig` (e.g. `192.168.1.50`)
-6. Allow **TCP 5555 inbound** in Windows Firewall if the Mac cannot connect
+4. `python omen\publish_d405.py --list-webcams` — pick the USB camera index, not the HP laptop camera and not the D405 (often 640x480)
+5. `omen/run_publish.bat` (this PC: `--webcam-index 0` is the 1280x720 USB cam; override if needed)
+6. Note IPv4 from `ipconfig` (e.g. `192.168.1.50`)
+7. Allow **TCP 5555 inbound** in Windows Firewall if the Mac cannot connect
 
 Optional depth dump (copy to Mac later):
 
@@ -88,7 +90,7 @@ python -m so101 replay --episode 0
 
 Default eval is a Google DeepMind-style protocol: binary success, independent trials, small condition grid (`config/eval/pen_to_keys.yaml` — pen left/center/right). After each rollout (or during it to stop early) score **y** success / **n** fail (`s`/`f` aliases). Logs: `outputs/eval/<checkpoint_name>/<run_id>/` (`protocol.json`, `summary.json` with `pc_success`, `trials/0001/`). Per-trial reset prompts still wait for Enter; `--yes` only skips the initial hardware confirm. Unscored timed run: `python -m so101 eval --duration 60` or `PROTOCOL= bash scripts/11_eval_act.sh`.
 
-RGB from the Omen ZMQ stream is stored in each episode `front.mp4`. 16-bit depth is only in the optional Omen dump.
+RGB from the Omen ZMQ stream is stored per episode as `wrist.mp4` (D405) and `overhead.mp4` (USB webcam). 16-bit depth is only in the optional Omen dump.
 
 ACT (Action Chunking Transformer) copies your teleop demos. Same scene, same task string, same camera config at record and eval. Training holds out episodes (`val_frac=0.2`, `--seed`) and logs offline `val_l1`; **train loss is not the score**. Checkpoints: `outputs/train/act_so101_d405_demo/` (`config.json`, `split.json`, `stats.json`, `metrics.jsonl`, `last/model.pt`, `best_val/model.pt`). Protocol eval loads `best_val` when present (`python -m so101 eval --protocol ...`).
 

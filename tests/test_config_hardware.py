@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from so101.config import CameraSettings, PortsConfig, load_camera, load_env_file, load_ports, project_root
+from so101.config import CameraSettings, PortsConfig, load_camera, load_cameras, load_env_file, load_ports, project_root
 from so101.dataset.schema import JOINT_NAMES
 from so101.hardware import action_dict_from_qpos, camera_config_dict, qpos_from_obs, rgb_from_obs
 
@@ -83,6 +83,23 @@ def test_load_camera_zmq_ok(tmp_path: Path) -> None:
     assert cam.fps == 15
 
 
+def test_load_cameras_wrist_and_overhead(tmp_path: Path) -> None:
+    path = tmp_path / "camera.env"
+    path.write_text(
+        "CAMERA_BACKEND=zmq\n"
+        "ZMQ_HOST=192.168.1.50\n"
+        "ZMQ_PORT=5555\n"
+        "CAMERA_NAMES=wrist,overhead\n"
+        "CAMERA_WIDTH=640\n"
+        "CAMERA_HEIGHT=480\n"
+        "CAMERA_FPS=15\n"
+    )
+    cams = load_cameras(path)
+    assert [c.name for c in cams] == ["wrist", "overhead"]
+    assert all(c.zmq_host == "192.168.1.50" for c in cams)
+    assert all(c.width == 640 and c.height == 480 for c in cams)
+
+
 def test_camera_config_dict_zmq() -> None:
     cam = CameraSettings(
         backend="zmq",
@@ -139,3 +156,31 @@ def test_make_follower_and_leader_construct_without_connect() -> None:
     assert follower.config.port == ports.follower_port
     assert "front" in follower.config.cameras
     assert leader.config.port == ports.leader_port
+
+
+def test_make_follower_two_zmq_cameras() -> None:
+    from so101.hardware import make_follower
+
+    ports = PortsConfig(follower_port="/dev/tty.usbmodemA", leader_port="/dev/tty.usbmodemB")
+    cams = [
+        CameraSettings(
+            backend="zmq",
+            name="wrist",
+            width=640,
+            height=480,
+            fps=15,
+            zmq_host="192.168.1.50",
+            zmq_port=5555,
+        ),
+        CameraSettings(
+            backend="zmq",
+            name="overhead",
+            width=640,
+            height=480,
+            fps=15,
+            zmq_host="192.168.1.50",
+            zmq_port=5555,
+        ),
+    ]
+    follower = make_follower(ports, cams, with_cameras=True)
+    assert set(follower.config.cameras) == {"wrist", "overhead"}

@@ -21,8 +21,9 @@
 
 ## Two machines
 - [ ] **Mac:** leader + follower USB (motor boards can share USB 2)
-- [ ] **HP Omen:** D405 on a USB 3 SuperSpeed port (not a USB 2 hub)
+- [ ] **HP Omen:** D405 (wrist) on USB 3; USB webcam (overhead)
 - [ ] Same Wi-Fi/LAN; Omen `ipconfig` IPv4 written into Mac `config/camera.env` as `ZMQ_HOST`
+- [ ] Mac `config/camera.env` has `CAMERA_NAMES=wrist,overhead`
 - [ ] Windows Firewall allows inbound TCP **5555**
 - [ ] Do **not** train on the 4 GB Omen (train ACT on the Mac with MPS)
 
@@ -38,8 +39,8 @@
 ## Omen software order
 1. Miniconda installed
 2. `omen\setup_omen.bat`
-3. D405 plugged into USB 3; RealSense Viewer optional sanity check
-4. `omen\run_publish.bat` (leave it running)
+3. D405 plugged into USB 3 (wrist); USB webcam plugged in (overhead)
+4. `python omen\publish_d405.py --list-webcams` then `omen\run_publish.bat` (leave it running)
 
 ## Session
 1. Mac: `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (operator site; **D** = status check)
