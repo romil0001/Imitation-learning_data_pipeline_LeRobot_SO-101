@@ -53,7 +53,7 @@ On the Omen you only need the `omen/` folder after clone.
 2. Plug **D405** into a **USB 3** port (wrist) and the **USB webcam** (overhead)
 3. Double-click `omen/setup_omen.bat` (or run it from Anaconda Prompt)
 4. `python omen\publish_d405.py --list-webcams` — pick the USB camera index, not the HP laptop camera and not the D405 (often 640x480)
-5. `omen/run_publish.bat` (this PC: `--webcam-index 0` is the 1280x720 USB cam; override if needed)
+5. `omen/run_publish.bat` (XWF-1080P is usually `--webcam-index 2`; `0` is the laptop cam)
 6. Note IPv4 from `ipconfig` (e.g. `192.168.1.50`)
 7. Allow **TCP 5555 inbound** in Windows Firewall if the Mac cannot connect
 
