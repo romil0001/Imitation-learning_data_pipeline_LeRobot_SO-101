@@ -94,5 +94,7 @@ RGB from the Omen ZMQ stream is stored per episode as `wrist.mp4` (D405) and `ov
 
 ACT (Action Chunking Transformer) copies your teleop demos. Same scene, same task string, same camera config at record and eval. Training holds out episodes (`val_frac=0.2`, `--seed`) and logs offline `val_l1`; **train loss is not the score**. Checkpoints: `outputs/train/act_so101_d405_demo/` (`config.json`, `split.json`, `stats.json`, `metrics.jsonl`, `last/model.pt`, `best_val/model.pt`). Protocol eval loads `best_val` when present (`python -m so101 eval --protocol ...`).
 
+When `use_depth` is set in the dataset, ACT trains on RGB + wrist depth (metric uint16, normalized). Eval subscribes to the same ZMQ depth stream. Optional JAX backend: `python -m so101 train --backend jax` (Flax, `tiny` backbone; install `pip install -e ".[jax]"`).
+
 ## Quick start
 See `docs/checklist.md`.

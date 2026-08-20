@@ -36,7 +36,7 @@ class StubPolicy:
     def reset(self) -> None:
         self.resets += 1
 
-    def select_action(self, image_rgb: np.ndarray, state: np.ndarray) -> np.ndarray:
+    def select_action(self, image_rgb: np.ndarray, state: np.ndarray, depth_u16=None) -> np.ndarray:
         assert image_rgb.shape == (24, 32, 3)
         self.seen_states.append(state.copy())
         out = state.copy()

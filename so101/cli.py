@@ -62,6 +62,7 @@ def cmd_train(args: argparse.Namespace) -> int:
         val_frac=args.val_frac,
         seed=args.seed,
         eval_every=args.eval_every,
+        backend=args.backend,
     )
     return 0
 
@@ -99,6 +100,12 @@ def build_parser() -> argparse.ArgumentParser:
     tr.add_argument("--val-frac", type=float, default=0.2, help="Episode-level holdout fraction")
     tr.add_argument("--seed", type=int, default=0)
     tr.add_argument("--eval-every", type=int, default=1000, help="Offline val L1 interval (steps)")
+    tr.add_argument(
+        "--backend",
+        choices=("torch", "jax"),
+        default="torch",
+        help="torch (PyTorch/MPS/CUDA, resnet18) or jax (Flax, tiny backbone)",
+    )
     tr.set_defaults(func=cmd_train)
 
     ev = sub.add_parser("eval", help="Run a trained ACT policy on the follower")

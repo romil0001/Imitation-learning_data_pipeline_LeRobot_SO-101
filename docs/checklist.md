@@ -46,5 +46,5 @@
 1. Mac: `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (operator site; **D** = status check)
 2. Mac: `bash scripts/06_teleoperate.sh`
 3. Mac: `bash scripts/08_record.sh` (~50 episodes for ACT; same cameras/task; data in `data/datasets/`)
-4. Mac: `bash scripts/10_train_act.sh` (MPS, hours — not the Omen; holds out episodes, writes `best_val`)
-5. Mac: follower + Omen publisher → `bash scripts/11_eval_act.sh` (loads `best_val`; scored pen-to-keys grid; reset scene, then **y**/**n** each trial; train loss is not the score; logs in `outputs/eval/`)
+4. Mac: `bash scripts/10_train_act.sh` (MPS, hours — not the Omen; holds out episodes, writes `best_val`; depth used automatically if recorded; optional `--backend jax`)
+5. Mac: follower + Omen publisher → `bash scripts/11_eval_act.sh` (loads `best_val`; wrist depth fed to policy when trained with depth; scored pen-to-keys grid; reset scene, then **y**/**n** each trial; train loss is not the score; logs in `outputs/eval/`)

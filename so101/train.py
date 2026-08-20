@@ -14,7 +14,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from so101.dataset import SO101Dataset, compute_stats, write_stats
-from so101.models.act import ACT, ACTConfig, preprocess_image
+from so101.models.act import ACT, ACTConfig, preprocess_depth, preprocess_image
 
 
 def detect_device() -> str:
@@ -64,9 +64,10 @@ class ACTChunkDataset(Dataset):
         self.state_std = np.asarray(stats["state_std"], dtype=np.float32)
         self.action_mean = np.asarray(stats["action_mean"], dtype=np.float32)
         self.action_std = np.asarray(stats["action_std"], dtype=np.float32)
-        self.episodes: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+        self.episodes: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]] = []
         self.index: list[tuple[int, int]] = []
         self.camera_names = list(self.ds.meta.names())
+        self.use_depth = bool(self.ds.meta.use_depth)
         if episode_indices is None:
             episode_indices = list(range(self.ds.meta.episode_count))
         for local_i, ep_i in enumerate(episode_indices):
@@ -82,7 +83,16 @@ class ACTChunkDataset(Dataset):
                 )
                 per_cam.append(resized)
             stacked = np.stack(per_cam, axis=1)
-            self.episodes.append((ep.state, ep.action, stacked))
+            depth_stack: np.ndarray | None = None
+            if self.use_depth:
+                depth_frames = ep.load_depth()
+                depth_stack = np.stack(
+                    [
+                        cv2.resize(z, (cfg.image_size, cfg.image_size), interpolation=cv2.INTER_NEAREST)
+                        for z in depth_frames
+                    ]
+                )
+            self.episodes.append((ep.state, ep.action, stacked, depth_stack))
             for t in range(ep.num_frames):
                 self.index.append((local_i, t))
 
@@ -91,7 +101,7 @@ class ACTChunkDataset(Dataset):
 
     def __getitem__(self, i: int) -> dict[str, torch.Tensor]:
         ep_i, t = self.index[i]
-        state, action, frames = self.episodes[ep_i]
+        state, action, frames, depth_stack = self.episodes[ep_i]
         t_len = state.shape[0]
         cams = frames[t]
         imgs = [
@@ -106,17 +116,28 @@ class ACTChunkDataset(Dataset):
         n = end - t
         chunk[:n] = (action[t:end] - self.action_mean) / self.action_std
         mask[:n] = 1.0
-        return {
+        out: dict[str, torch.Tensor] = {
             "images": img,
             "state": torch.from_numpy(st.astype(np.float32)),
             "actions": torch.from_numpy(chunk),
             "action_mask": torch.from_numpy(mask),
         }
+        if self.use_depth:
+            assert depth_stack is not None
+            out["depth"] = preprocess_depth(depth_stack[t], self.cfg.image_size, self.cfg.depth_max_mm)
+        return out
 
 
 def _save_weights(model: ACT, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), path)
+
+
+def _batch_depth(batch: dict, device: str) -> torch.Tensor | None:
+    depth = batch.get("depth")
+    if depth is None:
+        return None
+    return depth.to(device)
 
 
 def _validate(model: ACT, loader: DataLoader, device: str) -> tuple[float, float]:
@@ -129,7 +150,9 @@ def _validate(model: ACT, loader: DataLoader, device: str) -> tuple[float, float
             state = batch["state"].to(device)
             actions = batch["actions"].to(device)
             mask = batch["action_mask"].to(device)
-            out = model(images=images, state=state, actions=actions, action_mask=mask)
+            out = model(
+                images=images, state=state, actions=actions, action_mask=mask, depth=_batch_depth(batch, device)
+            )
             losses.append(float(out["loss"].detach().cpu()))
             l1s.append(float(out["l1"].detach().cpu()))
     model.train()
@@ -150,16 +173,36 @@ def train(
     seed: int = 0,
     eval_every: int = 1000,
     grad_clip: float = 1.0,
+    backend: str = "torch",
 ) -> Path:
     dataset_root = Path(dataset_root)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     cfg = config or ACTConfig()
+    cfg = ACTConfig(**{**cfg.to_dict(), "backend": backend})
+    if backend == "jax":
+        from so101.jax_train import train_jax
+
+        return train_jax(
+            dataset_root=dataset_root,
+            output_dir=output_dir,
+            steps=steps,
+            batch_size=batch_size,
+            config=cfg,
+            val_frac=val_frac,
+            seed=seed,
+            eval_every=eval_every,
+            grad_clip=grad_clip,
+            lr_backbone=lr_backbone,
+            lr_rest=lr_rest,
+        )
     device = device or detect_device()
     set_seed(seed)
 
     ds = SO101Dataset(dataset_root)
     train_episodes, val_episodes = split_episodes(ds.meta.episode_count, val_frac=val_frac, seed=seed)
+    if cfg.use_depth != ds.meta.use_depth:
+        cfg = ACTConfig(**{**cfg.to_dict(), "use_depth": ds.meta.use_depth, "depth_camera_name": ds.meta.depth_camera_name})
     stats = compute_stats(ds, episode_indices=train_episodes)
     write_stats(output_dir, stats)
     (output_dir / "split.json").write_text(
@@ -198,6 +241,7 @@ def train(
         "lr_backbone": lr_backbone,
         "lr_rest": lr_rest,
         "grad_clip": grad_clip,
+        "backend": backend,
     }
     (output_dir / "config.json").write_text(json.dumps(run_config, indent=2) + "\n")
 
@@ -227,7 +271,9 @@ def train(
         actions = batch["actions"].to(device)
         mask = batch["action_mask"].to(device)
         opt.zero_grad(set_to_none=True)
-        out = model(images=images, state=state, actions=actions, action_mask=mask)
+        out = model(
+            images=images, state=state, actions=actions, action_mask=mask, depth=_batch_depth(batch, device)
+        )
         out["loss"].backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
         opt.step()
@@ -270,6 +316,7 @@ def train_from_env(
     val_frac: float = 0.2,
     seed: int = 0,
     eval_every: int = 1000,
+    backend: str = "torch",
 ) -> Path:
     from so101.config import project_root
 
@@ -277,11 +324,23 @@ def train_from_env(
     dataset_root = root / "data" / "datasets" / dataset_name
     if not (dataset_root / "meta.json").is_file():
         raise FileNotFoundError(f"No local dataset at {dataset_root}. Record first: python -m so101 record")
-    device = detect_device()
+    meta = SO101Dataset(dataset_root).meta
+    device = detect_device() if backend == "torch" else "cpu"
     if batch_size <= 0:
-        batch_size = 8 if device == "cuda" else 2
+        if backend == "jax":
+            batch_size = 4
+        else:
+            batch_size = 8 if device == "cuda" else 2
     out = Path(output_dir) if output_dir else root / "outputs" / "train" / f"act_{dataset_name}"
-    print(f"ACT train  dataset={dataset_root}  device={device}  batch={batch_size}  steps={steps}")
+    cfg = ACTConfig(
+        use_depth=meta.use_depth,
+        depth_camera_name=meta.depth_camera_name,
+        backend=backend,
+    )
+    print(
+        f"ACT train  dataset={dataset_root}  backend={backend}  device={device}  "
+        f"batch={batch_size}  steps={steps}  depth={meta.use_depth}"
+    )
     print(f"  seed={seed}  val_frac={val_frac}  eval_every={eval_every}")
     print(f"Checkpoints: {out}/last and {out}/best_val (pick best_val for protocol eval)")
     return train(
@@ -289,9 +348,10 @@ def train_from_env(
         output_dir=out,
         steps=steps,
         batch_size=batch_size,
-        config=ACTConfig(),
+        config=cfg,
         device=device,
         val_frac=val_frac,
         seed=seed,
         eval_every=eval_every,
+        backend=backend,
     )
