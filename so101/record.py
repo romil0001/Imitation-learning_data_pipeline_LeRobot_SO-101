@@ -29,6 +29,8 @@ def run_record_loop(
     fps: int,
     keys: KeySource,
     num_episodes: int | None = None,
+    depth_source: Any | None = None,
+    depth_camera_name: str = "wrist",
     sleep: Callable[[float], None] = time.sleep,
 ) -> int:
     """Record until num_episodes are saved (or until q). Returns saved count."""
@@ -45,11 +47,19 @@ def run_record_loop(
         action = leader.get_action()
         sent = follower.send_action(action)
         if phase == "record":
+            depth_u16 = None
+            if dataset.meta.use_depth:
+                if depth_source is None:
+                    raise RuntimeError("depth_source required when recording with use_depth")
+                depth_u16 = depth_source.latest_depth(depth_camera_name)
+                if depth_u16 is None:
+                    raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
             writer.add_frame(
                 state=qpos_from_obs(obs),
                 action=qpos_from_obs(sent if sent is not None else action),
                 timestamp=time.time(),
                 images={name: rgb_from_obs(obs, name) for name in names},
+                depth_u16=depth_u16,
             )
         key = keys.poll()
         if phase == "record":
@@ -99,9 +109,13 @@ def record_from_env(
     cameras = load_cameras()
     cam0 = cameras[0]
     names = [c.name for c in cameras]
+    use_depth = cam0.use_depth and cam0.backend == "zmq"
+    depth_name = cam0.name if use_depth else "wrist"
     root = project_root() / "data" / "datasets" / dataset_name
     if (root / "meta.json").is_file():
         dataset = SO101Dataset(root)
+        use_depth = dataset.meta.use_depth
+        depth_name = dataset.meta.depth_camera_name
         print(f"Resuming {root} with {dataset.meta.episode_count} episodes", flush=True)
     else:
         dataset = SO101Dataset.create(
@@ -116,6 +130,8 @@ def record_from_env(
                 camera_height=cam0.height,
                 task=task,
                 episode_count=0,
+                use_depth=use_depth,
+                depth_camera_name=depth_name,
             ),
         )
     remaining = num_episodes - dataset.meta.episode_count
@@ -126,6 +142,8 @@ def record_from_env(
     print("BOTH ARMS: follower + leader USB and 12V ON. Omen publisher must be running.")
     print(f"Dataset {root}  this_run={remaining}  target={num_episodes}  task={task!r}")
     print(f"Cameras: {', '.join(names)}  {cam0.width}x{cam0.height}@{cam0.fps}")
+    if use_depth:
+        print(f"Depth: {depth_name} uint16 from ZMQ (Omen publisher must not use --no-depth)")
     if confirm:
         input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
 
@@ -133,6 +151,11 @@ def record_from_env(
     leader = make_leader(ports)
     follower.connect()
     leader.connect()
+    depth_source = None
+    if use_depth:
+        from so101.zmq_rgbd import LatestZMQRGBD
+
+        depth_source = LatestZMQRGBD(cam0.zmq_host, cam0.zmq_port)
     try:
         with StdinKeys() as keys:
             saved = run_record_loop(
@@ -143,8 +166,12 @@ def record_from_env(
                 fps=cam0.fps,
                 keys=keys,
                 num_episodes=remaining,
+                depth_source=depth_source,
+                depth_camera_name=depth_name,
             )
     finally:
+        if depth_source is not None:
+            depth_source.close()
         leader.disconnect()
         follower.disconnect()
 

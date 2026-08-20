@@ -43,7 +43,7 @@ _latest_jpeg = b""
 _latest_jpegs: dict[str, bytes] = {}
 _jpeg_lock = threading.Lock()
 _stop = threading.Event()
-_stats = {"last_ts": 0.0, "fps": 0.0, "n": 0}
+_stats = {"last_ts": 0.0, "fps": 0.0, "n": 0, "depth_ok": False}
 
 
 def load_env_file(path: Path) -> dict[str, str]:
@@ -75,6 +75,7 @@ def apply_camera_env() -> None:
     CFG["width"] = env.get("CAMERA_WIDTH", "640")
     CFG["height"] = env.get("CAMERA_HEIGHT", "480")
     CFG["fps"] = env.get("CAMERA_FPS", "15")
+    CFG["use_depth"] = env.get("CAMERA_USE_DEPTH", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def note_frame() -> None:
@@ -91,6 +92,8 @@ def note_frame() -> None:
 
 def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
     global _latest_jpeg
+    from so101.zmq_rgbd import decode_depth_png_b64, depth_colormap_bgr
+
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.SUB)
     sock.setsockopt_string(zmq.SUBSCRIBE, "")
@@ -112,6 +115,16 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
         for name, b64 in images.items():
             try:
                 decoded[name] = base64.b64decode(b64)
+            except Exception:
+                continue
+        for name, b64 in (data.get("depths") or {}).items():
+            try:
+                z = decode_depth_png_b64(b64)
+                vis = depth_colormap_bgr(z)
+                ok, buf = cv2.imencode(".jpg", vis, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                if ok:
+                    decoded[f"{name}_depth"] = buf.tobytes()
+                    _stats["depth_ok"] = True
             except Exception:
                 continue
         if not decoded:
@@ -271,6 +284,7 @@ def api_status():
             "last_frame_age_s": age,
             "fps": round(_stats["fps"], 1),
             "frames": _stats["n"],
+            "depth_ok": bool(_stats.get("depth_ok")),
         },
         "arms": arm_status(),
         "v1": True,

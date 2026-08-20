@@ -99,6 +99,38 @@ def test_episode_writer_two_cameras(tmp_path: Path) -> None:
     assert (tmp_path / "episodes" / "000000" / "overhead.mp4").is_file()
 
 
+def test_episode_writer_depth(tmp_path: Path) -> None:
+    meta = DatasetMeta(
+        name="unit_demo",
+        fps=15,
+        joint_names=list(JOINT_NAMES),
+        camera_name="wrist",
+        camera_names=("wrist", "overhead"),
+        camera_width=32,
+        camera_height=24,
+        task="Pick pen",
+        episode_count=0,
+        use_depth=True,
+        depth_camera_name="wrist",
+    )
+    ds = SO101Dataset.create(tmp_path, meta)
+    writer = EpisodeWriter(ds, index=0)
+    depth = np.arange(32 * 24, dtype=np.uint16).reshape(24, 32)
+    writer.add_frame(
+        np.zeros(6, np.float32),
+        np.ones(6, np.float32),
+        0.0,
+        images={"wrist": _rgb_frame(24, 32, 1), "overhead": _rgb_frame(24, 32, 9)},
+        depth_u16=depth,
+    )
+    writer.save()
+    ep = SO101Dataset(tmp_path).load_episode(0)
+    assert ep.depth_path is not None
+    loaded = ep.load_depth()
+    assert loaded.shape == (1, 24, 32)
+    np.testing.assert_array_equal(loaded[0], depth)
+
+
 def test_resume_appends_next_episode_index(tmp_path: Path) -> None:
     meta = DatasetMeta(
         name="unit_demo",

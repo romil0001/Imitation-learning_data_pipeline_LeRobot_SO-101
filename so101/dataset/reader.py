@@ -55,6 +55,11 @@ class SO101Dataset:
         timestamps = np.load(folder / "timestamps.npy")
         video_paths = {name: folder / f"{name}.mp4" for name in self.meta.names()}
         first = self.meta.camera_name
+        depth_path = None
+        if self.meta.use_depth:
+            candidate = folder / f"{self.meta.depth_camera_name}_depth.npy"
+            if candidate.is_file():
+                depth_path = candidate
         return Episode(
             index=emeta.index,
             num_frames=emeta.num_frames,
@@ -65,6 +70,7 @@ class SO101Dataset:
             video_path=video_paths[first],
             camera_name=first,
             video_paths=video_paths,
+            depth_path=depth_path,
         )
 
 

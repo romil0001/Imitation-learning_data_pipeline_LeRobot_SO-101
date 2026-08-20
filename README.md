@@ -90,7 +90,7 @@ python -m so101 replay --episode 0
 
 Default eval is a Google DeepMind-style protocol: binary success, independent trials, small condition grid (`config/eval/pen_to_keys.yaml` — pen left/center/right). After each rollout (or during it to stop early) score **y** success / **n** fail (`s`/`f` aliases). Logs: `outputs/eval/<checkpoint_name>/<run_id>/` (`protocol.json`, `summary.json` with `pc_success`, `trials/0001/`). Per-trial reset prompts still wait for Enter; `--yes` only skips the initial hardware confirm. Unscored timed run: `python -m so101 eval --duration 60` or `PROTOCOL= bash scripts/11_eval_act.sh`.
 
-RGB from the Omen ZMQ stream is stored per episode as `wrist.mp4` (D405) and `overhead.mp4` (USB webcam). 16-bit depth is only in the optional Omen dump.
+RGB from the Omen ZMQ stream is stored per episode as `wrist.mp4` (D405) and `overhead.mp4` (USB webcam). With `CAMERA_USE_DEPTH=true`, metric wrist depth is streamed over ZMQ and saved as `wrist_depth.npy` (uint16 mm, aligned to color).
 
 ACT (Action Chunking Transformer) copies your teleop demos. Same scene, same task string, same camera config at record and eval. Training holds out episodes (`val_frac=0.2`, `--seed`) and logs offline `val_l1`; **train loss is not the score**. Checkpoints: `outputs/train/act_so101_d405_demo/` (`config.json`, `split.json`, `stats.json`, `metrics.jsonl`, `last/model.pt`, `best_val/model.pt`). Protocol eval loads `best_val` when present (`python -m so101 eval --protocol ...`).
 

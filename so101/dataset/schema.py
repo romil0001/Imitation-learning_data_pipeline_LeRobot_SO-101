@@ -27,6 +27,8 @@ class DatasetMeta:
     task: str
     episode_count: int
     camera_names: tuple[str, ...] = ()
+    use_depth: bool = False
+    depth_camera_name: str = "wrist"
 
     def names(self) -> tuple[str, ...]:
         if self.camera_names:
@@ -55,6 +57,8 @@ class DatasetMeta:
             task=str(data["task"]),
             episode_count=int(data["episode_count"]),
             camera_names=camera_names,
+            use_depth=bool(data.get("use_depth", False)),
+            depth_camera_name=str(data.get("depth_camera_name", "wrist")),
         )
 
 
@@ -83,6 +87,7 @@ class Episode:
     video_path: Path
     camera_name: str
     video_paths: dict[str, Path] | None = None
+    depth_path: Path | None = None
 
     def load_frames(self, camera_name: str | None = None) -> Any:
         from so101.dataset.video import read_mp4
@@ -90,3 +95,10 @@ class Episode:
         name = camera_name or self.camera_name
         paths = self.video_paths or {self.camera_name: self.video_path}
         return read_mp4(paths[name])
+
+    def load_depth(self) -> Any:
+        import numpy as np
+
+        if self.depth_path is None or not self.depth_path.is_file():
+            raise FileNotFoundError(f"No depth file for episode {self.index}")
+        return np.load(self.depth_path)
