@@ -59,6 +59,93 @@ def _synthetic_dataset(tmp_path: Path, episodes: int = 2, t: int = 16) -> Path:
     return tmp_path
 
 
+def test_act_forward_with_depth() -> None:
+    cfg = _tiny_cfg()
+    cfg = ACTConfig(**{**cfg.to_dict(), "use_depth": True})
+    model = ACT(cfg)
+    b, c = 2, cfg.chunk_size
+    images = torch.rand(b, 3, cfg.image_size, cfg.image_size)
+    depth = torch.rand(b, cfg.image_size, cfg.image_size)
+    state = torch.randn(b, 6)
+    actions = torch.randn(b, c, 6)
+    mask = torch.ones(b, c)
+    out = model(images=images, state=state, actions=actions, action_mask=mask, depth=depth)
+    assert out["pred_actions"].shape == (b, c, 6)
+    out["loss"].backward()
+
+
+def test_train_with_depth_then_select_action(tmp_path: Path) -> None:
+    ds = SO101Dataset.create(
+        tmp_path / "data",
+        DatasetMeta(
+            name="depth",
+            fps=15,
+            joint_names=list(JOINT_NAMES),
+            camera_name="wrist",
+            camera_names=("wrist", "overhead"),
+            camera_width=32,
+            camera_height=32,
+            task="synth",
+            episode_count=0,
+            use_depth=True,
+            depth_camera_name="wrist",
+        ),
+    )
+    rng = np.random.default_rng(0)
+    for i in range(2):
+        w = EpisodeWriter(ds, i)
+        for k in range(8):
+            w.add_frame(
+                rng.normal(size=6).astype(np.float32),
+                rng.normal(size=6).astype(np.float32),
+                k / 15.0,
+                images={
+                    "wrist": rng.integers(0, 255, size=(32, 32, 3), dtype=np.uint8),
+                    "overhead": rng.integers(0, 255, size=(32, 32, 3), dtype=np.uint8),
+                },
+                depth_u16=rng.integers(100, 1500, size=(32, 32), dtype=np.uint16),
+            )
+        w.save()
+    cfg = ACTConfig(**{**_tiny_cfg().to_dict(), "use_depth": True})
+    out_dir = tmp_path / "ckpt"
+    train(
+        dataset_root=tmp_path / "data",
+        output_dir=out_dir,
+        steps=2,
+        batch_size=2,
+        config=cfg,
+        device="cpu",
+    )
+    policy = ACTPolicy.load(out_dir, device="cpu")
+    assert policy.cfg.use_depth
+    a = policy.select_action(
+        [np.zeros((32, 32, 3), dtype=np.uint8), np.zeros((32, 32, 3), dtype=np.uint8)],
+        np.zeros(6, dtype=np.float32),
+        depth_u16=np.ones((32, 32), dtype=np.uint16) * 500,
+    )
+    assert a.shape == (6,)
+
+
+def test_jax_train_two_steps(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    jax = pytest.importorskip("jax")
+    del jax
+    root = _synthetic_dataset(tmp_path / "data")
+    out_dir = tmp_path / "ckpt_jax"
+    cfg = ACTConfig(**{**_tiny_cfg().to_dict(), "backend": "jax", "backbone": "tiny"})
+    train(
+        dataset_root=root,
+        output_dir=out_dir,
+        steps=2,
+        batch_size=2,
+        config=cfg,
+        backend="jax",
+    )
+    policy = ACTPolicy.load(out_dir, device="cpu")
+    a = policy.select_action(np.zeros((32, 32, 3), dtype=np.uint8), np.zeros(6, dtype=np.float32))
+    assert a.shape == (6,)
+
+
 def test_act_forward_backward() -> None:
     cfg = _tiny_cfg()
     model = ACT(cfg)
@@ -230,9 +317,9 @@ def test_select_action_replans_only_when_queue_empty() -> None:
     calls = {"n": 0}
     orig = policy._predict_chunk
 
-    def counted(image_rgb, state):
+    def counted(image_rgb, state, depth_u16=None):
         calls["n"] += 1
-        return orig(image_rgb, state)
+        return orig(image_rgb, state, depth_u16=depth_u16)
 
     policy._predict_chunk = counted  # type: ignore[method-assign]
     img = np.zeros((32, 32, 3), dtype=np.uint8)

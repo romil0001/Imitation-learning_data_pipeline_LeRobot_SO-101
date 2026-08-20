@@ -33,6 +33,10 @@ class ACTConfig:
     image_size: int = 224
     ensemble_temp: float = 0.01
     n_action_steps: int = 100
+    use_depth: bool = False
+    depth_camera_name: str = "wrist"
+    depth_max_mm: float = 2000.0
+    backend: str = "torch"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -125,8 +129,16 @@ class ACT(nn.Module):
         self.enc_pos = nn.Parameter(torch.randn(1, 256, cfg.dim_model) * 0.02)
         self.latent_pos = nn.Parameter(torch.randn(1, 1 + cfg.chunk_size, cfg.dim_model) * 0.02)
         self.dec_queries = nn.Parameter(torch.randn(1, cfg.chunk_size, cfg.dim_model) * 0.02)
+        if cfg.use_depth:
+            self.depth_encoder = nn.Sequential(
+                nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(32, cfg.dim_model, kernel_size=3, stride=2, padding=1),
+            )
+        else:
+            self.depth_encoder = None
 
-    def encode_images(self, images: torch.Tensor) -> torch.Tensor:
+    def encode_images(self, images: torch.Tensor, depth: torch.Tensor | None = None) -> torch.Tensor:
         if images.ndim == 4:
             images = images.unsqueeze(1)
         b, n, _c, _h, _w = images.shape
@@ -134,7 +146,14 @@ class ACT(nn.Module):
         feat = self.proj(feat)
         tokens = feat.flatten(2).transpose(1, 2)
         _bn, hw, d = tokens.shape
-        return tokens.reshape(b, n * hw, d)
+        img_tokens = tokens.reshape(b, n * hw, d)
+        if depth is not None:
+            if self.depth_encoder is None:
+                raise ValueError("depth provided but ACTConfig.use_depth is false")
+            d_feat = self.depth_encoder(depth.unsqueeze(1))
+            d_tokens = d_feat.flatten(2).transpose(1, 2)
+            img_tokens = torch.cat([img_tokens, d_tokens], dim=1)
+        return img_tokens
 
     def encode_latent(self, state: torch.Tensor, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         state_tok = self.state_proj(state).unsqueeze(1)
@@ -151,9 +170,10 @@ class ACT(nn.Module):
         state: torch.Tensor,
         actions: torch.Tensor | None = None,
         action_mask: torch.Tensor | None = None,
+        depth: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         b = state.shape[0]
-        img_tokens = self.encode_images(images)
+        img_tokens = self.encode_images(images, depth=depth)
         state_tok = self.state_proj(state).unsqueeze(1)
         if actions is not None:
             mu, logvar = self.encode_latent(state, actions)
@@ -180,6 +200,17 @@ class ACT(nn.Module):
             l1 = state.new_zeros(())
             loss = l1
         return {"pred_actions": pred, "loss": loss, "l1": l1, "kl": kl}
+
+
+def preprocess_depth(depth_u16: np.ndarray, image_size: int, depth_max_mm: float) -> torch.Tensor:
+    import cv2
+
+    z = np.asarray(depth_u16, dtype=np.float32)
+    if z.shape[0] != image_size or z.shape[1] != image_size:
+        z = cv2.resize(z, (image_size, image_size), interpolation=cv2.INTER_NEAREST)
+    z[z <= 0] = 0.0
+    z = np.clip(z, 0.0, depth_max_mm) / max(depth_max_mm, 1.0)
+    return torch.from_numpy(z.astype(np.float32))
 
 
 def preprocess_image(image_rgb: np.ndarray, image_size: int, backbone: str) -> torch.Tensor:
@@ -214,7 +245,10 @@ class ACTPolicy:
         self._action_queue = deque()
 
     def _predict_chunk(
-        self, image_rgb: np.ndarray | list[np.ndarray] | tuple[np.ndarray, ...], state: np.ndarray
+        self,
+        image_rgb: np.ndarray | list[np.ndarray] | tuple[np.ndarray, ...],
+        state: np.ndarray,
+        depth_u16: np.ndarray | None = None,
     ) -> np.ndarray:
         if isinstance(image_rgb, (list, tuple)):
             imgs = [preprocess_image(im, self.cfg.image_size, self.cfg.backbone) for im in image_rgb]
@@ -223,16 +257,26 @@ class ACTPolicy:
             img = preprocess_image(image_rgb, self.cfg.image_size, self.cfg.backbone).unsqueeze(0).to(self.device)
         st = (np.asarray(state, dtype=np.float32) - self.state_mean) / self.state_std
         st_t = torch.from_numpy(st).unsqueeze(0).to(self.device)
-        pred = self.model(images=img, state=st_t)["pred_actions"][0].cpu().numpy()
+        depth_t = None
+        if self.cfg.use_depth:
+            if depth_u16 is None:
+                raise ValueError("depth_u16 required when ACTConfig.use_depth is true")
+            depth_t = preprocess_depth(depth_u16, self.cfg.image_size, self.cfg.depth_max_mm).unsqueeze(0).to(
+                self.device
+            )
+        pred = self.model(images=img, state=st_t, depth=depth_t)["pred_actions"][0].cpu().numpy()
         return pred * self.action_std + self.action_mean
 
     @torch.no_grad()
     def select_action(
-        self, image_rgb: np.ndarray | list[np.ndarray] | tuple[np.ndarray, ...], state: np.ndarray
+        self,
+        image_rgb: np.ndarray | list[np.ndarray] | tuple[np.ndarray, ...],
+        state: np.ndarray,
+        depth_u16: np.ndarray | None = None,
     ) -> np.ndarray:
         # Match LeRobot ACT: fill a queue of n_action_steps, then pop. Do not replan every frame.
         if not self._action_queue:
-            chunk = self._predict_chunk(image_rgb, state)
+            chunk = self._predict_chunk(image_rgb, state, depth_u16=depth_u16)
             n = min(int(self.cfg.n_action_steps), int(self.cfg.chunk_size), chunk.shape[0])
             self._action_queue.extend(np.asarray(row, dtype=np.float32) for row in chunk[:n])
         return np.asarray(self._action_queue.popleft(), dtype=np.float32)
@@ -253,9 +297,13 @@ class ACTPolicy:
     @classmethod
     def load(cls, directory: Path, device: str = "cpu") -> ACTPolicy:
         directory = Path(directory)
-        weights = find_policy_weights(directory)
         cfg_dir = directory if (directory / "config.json").is_file() else directory.parent
         cfg = ACTConfig.from_dict(json.loads((cfg_dir / "config.json").read_text()))
+        if cfg.backend == "jax":
+            from so101.models.act_jax import ACTPolicyJAX
+
+            return ACTPolicyJAX.load(directory, device=device)
+        weights = find_policy_weights(directory)
         stats = json.loads((cfg_dir / "stats.json").read_text())
         model = ACT(cfg)
         model.load_state_dict(torch.load(weights, map_location=device, weights_only=True))
@@ -263,13 +311,11 @@ class ACTPolicy:
 
 
 def find_policy_weights(directory: Path) -> Path:
-    """Prefer best_val, then last, then legacy run_dir/model.pt."""
+    """Prefer best_val, then last, then legacy run_dir/model.pt (or model.msgpack for JAX)."""
     directory = Path(directory)
-    for path in (
-        directory / "best_val" / "model.pt",
-        directory / "last" / "model.pt",
-        directory / "model.pt",
-    ):
-        if path.is_file():
-            return path
+    for name in ("model.pt", "model.msgpack"):
+        for sub in ("best_val", "last", ""):
+            path = directory / sub / name if sub else directory / name
+            if path.is_file():
+                return path
     raise FileNotFoundError(f"No ACT weights under {directory}")

@@ -30,11 +30,14 @@ def run_eval_loop(
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], float] = time.perf_counter,
     should_stop: Callable[[], bool] | None = None,
+    depth_source: Any | None = None,
+    depth_camera_name: str = "wrist",
 ) -> int:
     names = list(camera_names) if camera_names else [str(camera_name)]
     policy.reset()
     t0 = now()
     steps = 0
+    use_depth = bool(getattr(getattr(policy, "cfg", None), "use_depth", False))
     while True:
         if max_steps is not None and steps >= max_steps:
             break
@@ -46,7 +49,14 @@ def run_eval_loop(
         obs = follower.get_observation()
         images = rgbs_from_obs(obs, names)
         image = images[0] if len(images) == 1 else images
-        action = policy.select_action(image, qpos_from_obs(obs))
+        depth_u16 = None
+        if use_depth:
+            if depth_source is None:
+                raise RuntimeError("depth_source required when policy uses depth")
+            depth_u16 = depth_source.latest_depth(depth_camera_name)
+            if depth_u16 is None:
+                raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
+        action = policy.select_action(image, qpos_from_obs(obs), depth_u16=depth_u16)
         follower.send_action(action_dict_from_qpos(action))
         steps += 1
         leftover = (1.0 / fps) - (now() - loop_t)
@@ -88,7 +98,11 @@ def eval_from_env(
     names = [c.name for c in cameras]
     device = detect_device()
     policy = ACTPolicy.load(ckpt, device=device)
+    use_depth = bool(policy.cfg.use_depth)
+    depth_name = policy.cfg.depth_camera_name
     print("EVAL: follower USB + 12V ON. Leader can be OFF. Omen publisher must be streaming.")
+    if use_depth:
+        print(f"Depth: {depth_name} uint16 from ZMQ (Omen publisher must not use --no-depth)")
     proto_path = protocol.strip()
     cam_label = ",".join(names)
     if proto_path:
@@ -99,6 +113,11 @@ def eval_from_env(
         input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
     follower = make_follower(ports, cameras, with_cameras=True)
     follower.connect()
+    depth_source = None
+    if use_depth:
+        from so101.zmq_rgbd import LatestZMQRGBD
+
+        depth_source = LatestZMQRGBD(cam0.zmq_host, cam0.zmq_port)
     try:
         home = _dataset_home_qpos(root, dataset_name)
         if proto_path:
@@ -119,6 +138,8 @@ def eval_from_env(
                 run_dir=run_dir,
                 n_trials=n_trials,
                 reset_confirm=reset_confirm,
+                depth_source=depth_source,
+                depth_camera_name=depth_name,
             )
             if keys is not None:
                 summary = run_protocol(keys=keys, **kw)
@@ -134,6 +155,10 @@ def eval_from_env(
             camera_names=names,
             fps=cam0.fps,
             duration_s=duration_s,
+            depth_source=depth_source,
+            depth_camera_name=depth_name,
         )
     finally:
+        if depth_source is not None:
+            depth_source.close()
         follower.disconnect()

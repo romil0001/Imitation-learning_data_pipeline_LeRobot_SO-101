@@ -171,6 +171,8 @@ def run_protocol(
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], float] = time.perf_counter,
     max_steps: int | None = None,
+    depth_source: Any | None = None,
+    depth_camera_name: str = "wrist",
 ) -> dict[str, Any]:
     n = protocol.n_trials_per_condition if n_trials is None else int(n_trials)
     if n < 1:
@@ -219,6 +221,8 @@ def run_protocol(
                 sleep=sleep,
                 now=now,
                 should_stop=should_stop,
+                depth_source=depth_source,
+                depth_camera_name=depth_camera_name,
             )
             early_stop = bool(scored)
             success = scored[0] if scored else _wait_for_score(keys, sleep)
