@@ -10,6 +10,7 @@ import os
 import re
 import socket
 import subprocess
+import sys
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -23,6 +24,8 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 STATIC = Path(__file__).resolve().parent / "static"
 SESSION_LOG = ROOT / "outputs" / "session.log"
 BANNER_RE = re.compile(r"===== (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (\S+) =====")
