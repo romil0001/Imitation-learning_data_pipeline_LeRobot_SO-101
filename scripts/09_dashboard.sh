@@ -19,4 +19,5 @@ fi
 HOST="${DASHBOARD_HOST:-127.0.0.1}"
 PORT="${DASHBOARD_PORT:-8080}"
 echo "Open http://${HOST}:${PORT}"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 "$(conda_lerobot_python)" "$ROOT/dashboard/app.py" --host "$HOST" --port "$PORT"
