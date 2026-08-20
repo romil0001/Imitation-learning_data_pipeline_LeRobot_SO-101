@@ -121,3 +121,41 @@ def test_helpers_used_by_record() -> None:
     assert rgb_from_obs(obs, "front").shape[-1] == 3
     d = action_dict_from_qpos(np.zeros(6, np.float32))
     assert set(d) == {f"{n}.pos" for n in JOINT_NAMES}
+
+
+class DualFakeFollower(FakeFollower):
+    def get_observation(self) -> dict:
+        obs = super().get_observation()
+        obs["wrist"] = obs["front"]
+        obs["overhead"] = np.full((self.h, self.w, 3), 7, dtype=np.uint8)
+        return obs
+
+
+def test_record_two_cameras(tmp_path: Path) -> None:
+    meta = DatasetMeta(
+        name="unit_demo",
+        fps=15,
+        joint_names=list(JOINT_NAMES),
+        camera_name="wrist",
+        camera_names=("wrist", "overhead"),
+        camera_width=32,
+        camera_height=24,
+        task="Pick pen",
+        episode_count=0,
+    )
+    ds = SO101Dataset.create(tmp_path, meta)
+    keys = FakeKeys({1: "n"})
+    saved = run_record_loop(
+        dataset=ds,
+        follower=DualFakeFollower(),
+        leader=FakeLeader(),
+        camera_names=["wrist", "overhead"],
+        fps=15,
+        keys=keys,
+        num_episodes=1,
+        sleep=lambda _s: None,
+    )
+    assert saved == 1
+    ep = SO101Dataset(tmp_path).load_episode(0)
+    assert ep.load_frames("wrist").shape[0] == 2
+    assert ep.load_frames("overhead").shape[0] == 2

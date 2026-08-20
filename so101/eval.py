@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from so101.hardware import action_dict_from_qpos, qpos_from_obs, rgb_from_obs
+from so101.hardware import action_dict_from_qpos, qpos_from_obs, rgbs_from_obs
 
 
 def _dataset_home_qpos(root: Path, dataset_name: str) -> tuple[float, ...]:
@@ -22,7 +22,8 @@ def run_eval_loop(
     *,
     follower: Any,
     policy: Any,
-    camera_name: str,
+    camera_name: str | None = None,
+    camera_names: list[str] | None = None,
     fps: int,
     duration_s: float,
     max_steps: int | None = None,
@@ -30,6 +31,7 @@ def run_eval_loop(
     now: Callable[[], float] = time.perf_counter,
     should_stop: Callable[[], bool] | None = None,
 ) -> int:
+    names = list(camera_names) if camera_names else [str(camera_name)]
     policy.reset()
     t0 = now()
     steps = 0
@@ -42,7 +44,9 @@ def run_eval_loop(
             break
         loop_t = now()
         obs = follower.get_observation()
-        action = policy.select_action(rgb_from_obs(obs, camera_name), qpos_from_obs(obs))
+        images = rgbs_from_obs(obs, names)
+        image = images[0] if len(images) == 1 else images
+        action = policy.select_action(image, qpos_from_obs(obs))
         follower.send_action(action_dict_from_qpos(action))
         steps += 1
         leftover = (1.0 / fps) - (now() - loop_t)
@@ -65,7 +69,7 @@ def eval_from_env(
 ) -> int:
     from dataclasses import replace
 
-    from so101.config import load_camera, load_ports, project_root
+    from so101.config import load_cameras, load_ports, project_root
     from so101.hardware import make_follower
     from so101.home import interpolate_to_qpos
     from so101.keys import StdinKeys
@@ -79,18 +83,21 @@ def eval_from_env(
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"No ACT checkpoint at {ckpt}. Train first: python -m so101 train") from exc
     ports = load_ports()
-    cam = load_camera()
+    cameras = load_cameras()
+    cam0 = cameras[0]
+    names = [c.name for c in cameras]
     device = detect_device()
     policy = ACTPolicy.load(ckpt, device=device)
     print("EVAL: follower USB + 12V ON. Leader can be OFF. Omen publisher must be streaming.")
     proto_path = protocol.strip()
+    cam_label = ",".join(names)
     if proto_path:
-        print(f"Policy {ckpt}  camera={cam.name}  {cam.width}x{cam.height}@{cam.fps}  protocol={proto_path}")
+        print(f"Policy {ckpt}  camera={cam_label}  {cam0.width}x{cam0.height}@{cam0.fps}  protocol={proto_path}")
     else:
-        print(f"Policy {ckpt}  camera={cam.name}  {cam.width}x{cam.height}@{cam.fps}  duration={duration_s}s")
+        print(f"Policy {ckpt}  camera={cam_label}  {cam0.width}x{cam0.height}@{cam0.fps}  duration={duration_s}s")
     if confirm:
         input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
-    follower = make_follower(ports, cam, with_cameras=True)
+    follower = make_follower(ports, cameras, with_cameras=True)
     follower.connect()
     try:
         home = _dataset_home_qpos(root, dataset_name)
@@ -107,8 +114,8 @@ def eval_from_env(
                 protocol=loaded,
                 follower=follower,
                 policy=policy,
-                camera_name=cam.name,
-                fps=cam.fps,
+                camera_names=names,
+                fps=cam0.fps,
                 run_dir=run_dir,
                 n_trials=n_trials,
                 reset_confirm=reset_confirm,
@@ -124,8 +131,8 @@ def eval_from_env(
         return run_eval_loop(
             follower=follower,
             policy=policy,
-            camera_name=cam.name,
-            fps=cam.fps,
+            camera_names=names,
+            fps=cam0.fps,
             duration_s=duration_s,
         )
     finally:

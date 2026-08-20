@@ -10,7 +10,7 @@ echo "Open http://127.0.0.1:8080  — keep this running while you teleop/record.
 if load_camera; then
   echo "Camera backend: $CAMERA_BACKEND"
   if [[ "$CAMERA_BACKEND" == "zmq" ]]; then
-    echo "ZMQ: $ZMQ_HOST:${ZMQ_PORT:-5555} name=$CAMERA_NAME"
+    echo "ZMQ: $ZMQ_HOST:${ZMQ_PORT:-5555} names=${CAMERA_NAMES:-$CAMERA_NAME}"
   fi
 else
   echo "No camera.env yet — dashboard will show a blank feed until you set ZMQ_HOST."

@@ -21,12 +21,25 @@
 
   <main class="grid">
     <section class="panel cam">
-      <div class="panel-h">
-        <h1 id="cam-name">front</h1>
-        <span id="cam-meta" class="muted">ZMQ</span>
-      </div>
-      <div class="stage">
-        <img id="feed" src="/mjpeg" alt="D405 live"/>
+      <div class="cams">
+        <div class="cam-slot">
+          <div class="panel-h">
+            <h1 id="cam-name-overhead">overhead</h1>
+            <span class="muted">USB webcam</span>
+          </div>
+          <div class="stage">
+            <img id="feed-overhead" src="/mjpeg/overhead" alt="overhead live"/>
+          </div>
+        </div>
+        <div class="cam-slot">
+          <div class="panel-h">
+            <h1 id="cam-name-wrist">wrist</h1>
+            <span class="muted">D405</span>
+          </div>
+          <div class="stage">
+            <img id="feed-wrist" src="/mjpeg/wrist" alt="wrist live"/>
+          </div>
+        </div>
       </div>
     </section>
 

@@ -66,18 +66,23 @@ class ACTChunkDataset(Dataset):
         self.action_std = np.asarray(stats["action_std"], dtype=np.float32)
         self.episodes: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
         self.index: list[tuple[int, int]] = []
+        self.camera_names = list(self.ds.meta.names())
         if episode_indices is None:
             episode_indices = list(range(self.ds.meta.episode_count))
         for local_i, ep_i in enumerate(episode_indices):
             ep = self.ds.load_episode(ep_i)
-            frames = ep.load_frames()
-            resized = np.stack(
-                [
-                    cv2.resize(f, (cfg.image_size, cfg.image_size), interpolation=cv2.INTER_AREA)
-                    for f in frames
-                ]
-            )
-            self.episodes.append((ep.state, ep.action, resized))
+            per_cam = []
+            for name in self.camera_names:
+                frames = ep.load_frames(name)
+                resized = np.stack(
+                    [
+                        cv2.resize(f, (cfg.image_size, cfg.image_size), interpolation=cv2.INTER_AREA)
+                        for f in frames
+                    ]
+                )
+                per_cam.append(resized)
+            stacked = np.stack(per_cam, axis=1)
+            self.episodes.append((ep.state, ep.action, stacked))
             for t in range(ep.num_frames):
                 self.index.append((local_i, t))
 
@@ -88,7 +93,12 @@ class ACTChunkDataset(Dataset):
         ep_i, t = self.index[i]
         state, action, frames = self.episodes[ep_i]
         t_len = state.shape[0]
-        img = preprocess_image(frames[t], self.cfg.image_size, self.cfg.backbone)
+        cams = frames[t]
+        imgs = [
+            preprocess_image(cams[i], self.cfg.image_size, self.cfg.backbone)
+            for i in range(cams.shape[0])
+        ]
+        img = torch.stack(imgs, dim=0)
         st = (state[t] - self.state_mean) / self.state_std
         chunk = np.zeros((self.cfg.chunk_size, self.cfg.n_joints), dtype=np.float32)
         mask = np.zeros((self.cfg.chunk_size,), dtype=np.float32)
@@ -184,6 +194,7 @@ def train(
         "val_frac": val_frac,
         "eval_every": eval_every,
         "task": ds.meta.task,
+        "camera_names": list(ds.meta.names()),
         "lr_backbone": lr_backbone,
         "lr_rest": lr_rest,
         "grad_clip": grad_clip,

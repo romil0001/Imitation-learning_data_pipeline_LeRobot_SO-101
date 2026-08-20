@@ -69,6 +69,36 @@ def test_episode_writer_roundtrip(tmp_path: Path) -> None:
     assert frames.dtype == np.uint8
 
 
+def test_episode_writer_two_cameras(tmp_path: Path) -> None:
+    meta = DatasetMeta(
+        name="unit_demo",
+        fps=15,
+        joint_names=list(JOINT_NAMES),
+        camera_name="wrist",
+        camera_names=("wrist", "overhead"),
+        camera_width=32,
+        camera_height=24,
+        task="Pick pen",
+        episode_count=0,
+    )
+    ds = SO101Dataset.create(tmp_path, meta)
+    writer = EpisodeWriter(ds, index=0)
+    writer.add_frame(
+        np.zeros(6, np.float32),
+        np.ones(6, np.float32),
+        0.0,
+        images={"wrist": _rgb_frame(24, 32, 1), "overhead": _rgb_frame(24, 32, 9)},
+    )
+    writer.save()
+    loaded = SO101Dataset(tmp_path)
+    assert loaded.meta.names() == ("wrist", "overhead")
+    ep = loaded.load_episode(0)
+    assert ep.load_frames("wrist").shape == (1, 24, 32, 3)
+    assert ep.load_frames("overhead").shape == (1, 24, 32, 3)
+    assert (tmp_path / "episodes" / "000000" / "wrist.mp4").is_file()
+    assert (tmp_path / "episodes" / "000000" / "overhead.mp4").is_file()
+
+
 def test_resume_appends_next_episode_index(tmp_path: Path) -> None:
     meta = DatasetMeta(
         name="unit_demo",

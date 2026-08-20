@@ -127,11 +127,14 @@ class ACT(nn.Module):
         self.dec_queries = nn.Parameter(torch.randn(1, cfg.chunk_size, cfg.dim_model) * 0.02)
 
     def encode_images(self, images: torch.Tensor) -> torch.Tensor:
-        feat = self.backbone(images)
+        if images.ndim == 4:
+            images = images.unsqueeze(1)
+        b, n, _c, _h, _w = images.shape
+        feat = self.backbone(images.reshape(b * n, images.shape[2], images.shape[3], images.shape[4]))
         feat = self.proj(feat)
-        b, d, h, w = feat.shape
         tokens = feat.flatten(2).transpose(1, 2)
-        return tokens
+        _bn, hw, d = tokens.shape
+        return tokens.reshape(b, n * hw, d)
 
     def encode_latent(self, state: torch.Tensor, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         state_tok = self.state_proj(state).unsqueeze(1)
@@ -210,15 +213,23 @@ class ACTPolicy:
     def reset(self) -> None:
         self._action_queue = deque()
 
-    def _predict_chunk(self, image_rgb: np.ndarray, state: np.ndarray) -> np.ndarray:
-        img = preprocess_image(image_rgb, self.cfg.image_size, self.cfg.backbone).unsqueeze(0).to(self.device)
+    def _predict_chunk(
+        self, image_rgb: np.ndarray | list[np.ndarray] | tuple[np.ndarray, ...], state: np.ndarray
+    ) -> np.ndarray:
+        if isinstance(image_rgb, (list, tuple)):
+            imgs = [preprocess_image(im, self.cfg.image_size, self.cfg.backbone) for im in image_rgb]
+            img = torch.stack(imgs, dim=0).unsqueeze(0).to(self.device)
+        else:
+            img = preprocess_image(image_rgb, self.cfg.image_size, self.cfg.backbone).unsqueeze(0).to(self.device)
         st = (np.asarray(state, dtype=np.float32) - self.state_mean) / self.state_std
         st_t = torch.from_numpy(st).unsqueeze(0).to(self.device)
         pred = self.model(images=img, state=st_t)["pred_actions"][0].cpu().numpy()
         return pred * self.action_std + self.action_mean
 
     @torch.no_grad()
-    def select_action(self, image_rgb: np.ndarray, state: np.ndarray) -> np.ndarray:
+    def select_action(
+        self, image_rgb: np.ndarray | list[np.ndarray] | tuple[np.ndarray, ...], state: np.ndarray
+    ) -> np.ndarray:
         # Match LeRobot ACT: fill a queue of n_action_steps, then pop. Do not replan every frame.
         if not self._action_queue:
             chunk = self._predict_chunk(image_rgb, state)

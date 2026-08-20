@@ -38,7 +38,7 @@ echo " - Omen: omen\\run_publish.bat must be streaming"
 echo "============================================================"
 echo "Policy:   $POLICY_PATH"
 echo "Follower: $FOLLOWER_PORT ($FOLLOWER_ID)"
-echo "Camera:   $CAMERA_NAME backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-}"
+echo "Camera:   ${CAMERA_NAMES:-$CAMERA_NAME} backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-}"
 if [[ -n "$PROTOCOL" ]]; then
   echo "Protocol: $PROTOCOL"
   echo "Score:    y=success  n=fail after each trial (or during the run to stop early)"

@@ -1,11 +1,12 @@
-"""Publish D405 RGB (and optional depth dump) over ZMQ for the Mac.
+"""Publish D405 wrist RGB + USB webcam overhead over ZMQ for the Mac.
 
 LeRobot on the Mac subscribes with type=zmq. Message shape:
-  {"images": {"front": "<base64 JPEG>"}}
+  {"images": {"wrist": "<base64 JPEG>", "overhead": "<base64 JPEG>"}}
 
 Usage (Anaconda Prompt on the Omen):
   conda activate omen-d405
-  python omen/publish_d405.py --bind 0.0.0.0 --port 5555
+  python omen/publish_d405.py --list-webcams
+  python omen/publish_d405.py --webcam-index 1
 """
 
 from __future__ import annotations
@@ -24,14 +25,18 @@ import zmq
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="D405 → ZMQ JPEG publisher (Omen)")
+    p = argparse.ArgumentParser(description="D405 wrist + USB webcam overhead → ZMQ JPEG (Omen)")
     p.add_argument("--bind", default="0.0.0.0", help="Bind address")
     p.add_argument("--port", type=int, default=5555, help="ZMQ PUB port")
     p.add_argument("--width", type=int, default=640)
     p.add_argument("--height", type=int, default=480)
     p.add_argument("--fps", type=int, default=15)
     p.add_argument("--jpeg-quality", type=int, default=70)
-    p.add_argument("--camera-name", default="front", help="Key in images{} for LeRobot")
+    p.add_argument("--camera-name", default="wrist", help="D405 key in images{}")
+    p.add_argument("--overhead-name", default="overhead", help="Webcam key in images{}")
+    p.add_argument("--webcam-index", type=int, default=0, help="OpenCV index for USB overhead cam")
+    p.add_argument("--no-overhead", action="store_true", help="Publish D405 only")
+    p.add_argument("--list-webcams", action="store_true", help="Print OpenCV camera indices and exit")
     p.add_argument("--serial", default="", help="D405 serial; empty = first device")
     p.add_argument("--no-depth", action="store_true", help="RGB only (saves RAM)")
     p.add_argument(
@@ -43,8 +48,54 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def opencv_backend() -> int:
+    return cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+
+
+def list_webcams(max_index: int = 8) -> list[tuple[int, int, int]]:
+    found: list[tuple[int, int, int]] = []
+    backend = opencv_backend()
+    for i in range(max_index):
+        cap = cv2.VideoCapture(i, backend)
+        if not cap.isOpened():
+            cap.release()
+            continue
+        ok, frame = cap.read()
+        if ok and frame is not None:
+            found.append((i, int(frame.shape[1]), int(frame.shape[0])))
+        cap.release()
+    return found
+
+
+def open_webcam(index: int, width: int, height: int, fps: int) -> cv2.VideoCapture:
+    cap = cv2.VideoCapture(index, opencv_backend())
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_FPS, fps)
+    if not cap.isOpened():
+        raise RuntimeError(f"Could not open webcam index {index}")
+    return cap
+
+
+def jpeg_b64(bgr: np.ndarray, quality: int) -> str:
+    ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    if not ok:
+        raise RuntimeError("JPEG encode failed")
+    return base64.b64encode(buf.tobytes()).decode("ascii")
+
+
 def main() -> int:
     args = parse_args()
+    if args.list_webcams:
+        found = list_webcams()
+        if not found:
+            print("No OpenCV webcams opened. Plug in the USB camera and retry.", file=sys.stderr)
+            return 1
+        print("OpenCV camera indices (use --webcam-index for the USB overhead cam, not the laptop):")
+        for idx, w, h in found:
+            print(f"  {idx}: {w}x{h}")
+        return 0
+
     dump = Path(args.dump_dir) if args.dump_dir else None
     if dump:
         dump.mkdir(parents=True, exist_ok=True)
@@ -67,15 +118,31 @@ def main() -> int:
 
     device = profile.get_device()
     serial = device.get_info(rs.camera_info.serial_number)
-    print(f"Device serial: {serial}", flush=True)
+    print(f"Device serial: {serial}  name={args.camera_name}", flush=True)
+
+    webcam = None
+    if not args.no_overhead:
+        try:
+            webcam = open_webcam(args.webcam_index, args.width, args.height, args.fps)
+        except Exception as e:
+            pipeline.stop()
+            print(f"Failed to open overhead webcam index {args.webcam_index}: {e}", file=sys.stderr)
+            print("Run: python omen\\publish_d405.py --list-webcams", file=sys.stderr)
+            print("Then: python omen\\publish_d405.py --webcam-index N", file=sys.stderr)
+            return 1
+        print(
+            f"Overhead webcam index={args.webcam_index}  name={args.overhead_name}",
+            flush=True,
+        )
 
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.PUB)
     sock.bind(f"tcp://{args.bind}:{args.port}")
-    print(f"ZMQ PUB tcp://{args.bind}:{args.port}  camera_name={args.camera_name}", flush=True)
-    print("On the Mac, set ZMQ_HOST to this PC's LAN IP.", flush=True)
+    keys = [args.camera_name] + ([] if webcam is None else [args.overhead_name])
+    print(f"ZMQ PUB tcp://{args.bind}:{args.port}  cameras={keys}", flush=True)
+    print("On the Mac, set ZMQ_HOST to this PC's LAN IP and CAMERA_NAMES=wrist,overhead.", flush=True)
 
-    encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), args.jpeg_quality]
+    last_web: np.ndarray | None = None
     frame_i = 0
     t0 = time.time()
     n = 0
@@ -85,18 +152,26 @@ def main() -> int:
             color = frames.get_color_frame()
             if not color:
                 continue
-            bgr = np.asanyarray(color.get_data())
-            ok, buf = cv2.imencode(".jpg", bgr, encode_params)
-            if not ok:
-                continue
-            payload = {
-                "images": {args.camera_name: base64.b64encode(buf.tobytes()).decode("ascii")},
-                "ts": time.time(),
-            }
+            wrist_bgr = np.asanyarray(color.get_data())
+            images = {args.camera_name: jpeg_b64(wrist_bgr, args.jpeg_quality)}
+            if webcam is not None:
+                ok, web_bgr = webcam.read()
+                if ok and web_bgr is not None:
+                    if web_bgr.shape[1] != args.width or web_bgr.shape[0] != args.height:
+                        web_bgr = cv2.resize(web_bgr, (args.width, args.height))
+                    last_web = web_bgr
+                if last_web is None:
+                    continue
+                images[args.overhead_name] = jpeg_b64(last_web, args.jpeg_quality)
+            payload = {"images": images, "ts": time.time()}
             sock.send_string(json.dumps(payload))
 
             if dump and frame_i % max(1, args.dump_every) == 0:
-                (dump / f"rgb_{frame_i:06d}.jpg").write_bytes(buf.tobytes())
+                wrist_jpg = base64.b64decode(images[args.camera_name])
+                (dump / f"rgb_{frame_i:06d}.jpg").write_bytes(wrist_jpg)
+                if args.overhead_name in images:
+                    over_jpg = base64.b64decode(images[args.overhead_name])
+                    (dump / f"overhead_{frame_i:06d}.jpg").write_bytes(over_jpg)
                 if not args.no_depth:
                     depth = frames.get_depth_frame()
                     if depth:
@@ -107,11 +182,13 @@ def main() -> int:
             n += 1
             if n % 30 == 0:
                 dt = time.time() - t0
-                print(f"published {n} frames ({n / max(dt, 1e-3):.1f} fps)", flush=True)
+                print(f"published {n} frames ({n / max(dt, 1e-3):.1f} fps) keys={list(images)}", flush=True)
     except KeyboardInterrupt:
         print("\nStopped.", flush=True)
     finally:
         pipeline.stop()
+        if webcam is not None:
+            webcam.release()
         sock.close(0)
         ctx.term()
     return 0

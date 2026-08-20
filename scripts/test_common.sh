@@ -71,6 +71,23 @@ echo "$json" | grep -q 'width: 640'
 echo "$json" | grep -q 'height: 480'
 echo "$json" | grep -q 'fps: 15'
 
+# two cameras on one ZMQ bus
+cat > "$TMP/camera.env" <<EOF
+CAMERA_BACKEND=zmq
+ZMQ_HOST=192.168.1.50
+ZMQ_PORT=5555
+CAMERA_NAMES=wrist,overhead
+CAMERA_WIDTH=640
+CAMERA_HEIGHT=480
+CAMERA_FPS=15
+EOF
+load_camera
+json="$(robot_cameras_json)"
+echo "$json" | grep -q 'wrist:'
+echo "$json" | grep -q 'overhead:'
+echo "$json" | grep -q 'camera_name: "wrist"'
+echo "$json" | grep -q 'camera_name: "overhead"'
+
 # conda_lerobot_python prefers CONDA_PREFIX
 CONDA_PREFIX="$TMP/fakeconda"
 mkdir -p "$CONDA_PREFIX/bin"

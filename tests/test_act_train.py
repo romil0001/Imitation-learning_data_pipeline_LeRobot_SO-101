@@ -76,6 +76,57 @@ def test_act_forward_backward() -> None:
     assert any(grads)
 
 
+def test_act_forward_two_cameras() -> None:
+    cfg = _tiny_cfg()
+    model = ACT(cfg)
+    images = torch.rand(2, 2, 3, cfg.image_size, cfg.image_size)
+    state = torch.randn(2, 6)
+    actions = torch.randn(2, cfg.chunk_size, 6)
+    mask = torch.ones(2, cfg.chunk_size)
+    out = model(images=images, state=state, actions=actions, action_mask=mask)
+    assert out["pred_actions"].shape == (2, cfg.chunk_size, 6)
+    out["loss"].backward()
+
+
+def test_train_two_cameras_then_select_action(tmp_path: Path) -> None:
+    ds = SO101Dataset.create(
+        tmp_path / "data",
+        DatasetMeta(
+            name="dual",
+            fps=15,
+            joint_names=list(JOINT_NAMES),
+            camera_name="wrist",
+            camera_names=("wrist", "overhead"),
+            camera_width=32,
+            camera_height=32,
+            task="synth",
+            episode_count=0,
+        ),
+    )
+    rng = np.random.default_rng(0)
+    for i in range(2):
+        w = EpisodeWriter(ds, i)
+        for k in range(8):
+            w.add_frame(
+                rng.normal(size=6).astype(np.float32),
+                rng.normal(size=6).astype(np.float32),
+                k / 15.0,
+                images={
+                    "wrist": rng.integers(0, 255, size=(32, 32, 3), dtype=np.uint8),
+                    "overhead": rng.integers(0, 255, size=(32, 32, 3), dtype=np.uint8),
+                },
+            )
+        w.save()
+    out_dir = tmp_path / "ckpt"
+    train(dataset_root=tmp_path / "data", output_dir=out_dir, steps=2, batch_size=2, config=_tiny_cfg(), device="cpu")
+    policy = ACTPolicy.load(out_dir, device="cpu")
+    a = policy.select_action(
+        [np.zeros((32, 32, 3), dtype=np.uint8), np.zeros((32, 32, 3), dtype=np.uint8)],
+        np.zeros(6, dtype=np.float32),
+    )
+    assert a.shape == (6,)
+
+
 def test_split_episodes_disjoint_and_deterministic() -> None:
     train_a, val_a = split_episodes(10, val_frac=0.2, seed=0)
     train_b, val_b = split_episodes(10, val_frac=0.2, seed=0)

@@ -24,13 +24,15 @@ def run_record_loop(
     dataset: SO101Dataset,
     follower: Any,
     leader: Any,
-    camera_name: str,
+    camera_name: str | None = None,
+    camera_names: list[str] | None = None,
     fps: int,
     keys: KeySource,
     num_episodes: int | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> int:
     """Record until num_episodes are saved (or until q). Returns saved count."""
+    names = list(camera_names) if camera_names else [str(camera_name)]
     saved = 0
     phase = "record"
     index = dataset.next_episode_index()
@@ -47,7 +49,7 @@ def run_record_loop(
                 state=qpos_from_obs(obs),
                 action=qpos_from_obs(sent if sent is not None else action),
                 timestamp=time.time(),
-                image_rgb=rgb_from_obs(obs, camera_name),
+                images={name: rgb_from_obs(obs, name) for name in names},
             )
         key = keys.poll()
         if phase == "record":
@@ -88,13 +90,15 @@ def record_from_env(
     task: str = "Pick pen and place it next to the keys",
     confirm: bool = True,
 ) -> int:
-    from so101.config import load_camera, load_ports, project_root
+    from so101.config import load_cameras, load_ports, project_root
     from so101.dataset import DatasetMeta, compute_stats, write_stats
     from so101.hardware import make_follower, make_leader
     from so101.keys import StdinKeys
 
     ports = load_ports()
-    cam = load_camera()
+    cameras = load_cameras()
+    cam0 = cameras[0]
+    names = [c.name for c in cameras]
     root = project_root() / "data" / "datasets" / dataset_name
     if (root / "meta.json").is_file():
         dataset = SO101Dataset(root)
@@ -104,11 +108,12 @@ def record_from_env(
             root,
             DatasetMeta(
                 name=dataset_name,
-                fps=cam.fps,
+                fps=cam0.fps,
                 joint_names=list(JOINT_NAMES),
-                camera_name=cam.name,
-                camera_width=cam.width,
-                camera_height=cam.height,
+                camera_name=names[0],
+                camera_names=tuple(names),
+                camera_width=cam0.width,
+                camera_height=cam0.height,
                 task=task,
                 episode_count=0,
             ),
@@ -120,10 +125,11 @@ def record_from_env(
 
     print("BOTH ARMS: follower + leader USB and 12V ON. Omen publisher must be running.")
     print(f"Dataset {root}  this_run={remaining}  target={num_episodes}  task={task!r}")
+    print(f"Cameras: {', '.join(names)}  {cam0.width}x{cam0.height}@{cam0.fps}")
     if confirm:
         input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
 
-    follower = make_follower(ports, cam, with_cameras=True)
+    follower = make_follower(ports, cameras, with_cameras=True)
     leader = make_leader(ports)
     follower.connect()
     leader.connect()
@@ -133,8 +139,8 @@ def record_from_env(
                 dataset=dataset,
                 follower=follower,
                 leader=leader,
-                camera_name=cam.name,
-                fps=cam.fps,
+                camera_names=names,
+                fps=cam0.fps,
                 keys=keys,
                 num_episodes=remaining,
             )
