@@ -6,7 +6,7 @@ LeRobot on the Mac subscribes with type=zmq. Message shape:
 Usage (Anaconda Prompt on the Omen):
   conda activate omen-d405
   python omen/publish_d405.py --list-webcams
-  python omen/publish_d405.py --webcam-index 1
+  python omen/publish_d405.py --webcam-index 2
 """
 
 from __future__ import annotations
@@ -34,7 +34,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--jpeg-quality", type=int, default=70)
     p.add_argument("--camera-name", default="wrist", help="D405 key in images{}")
     p.add_argument("--overhead-name", default="overhead", help="Webcam key in images{}")
-    p.add_argument("--webcam-index", type=int, default=0, help="OpenCV index for USB overhead cam")
+    p.add_argument(
+        "--webcam-index",
+        type=int,
+        default=-1,
+        help="OpenCV index for USB overhead cam (-1 = auto-pick highest-res non-laptop)",
+    )
     p.add_argument("--no-overhead", action="store_true", help="Publish D405 only")
     p.add_argument("--list-webcams", action="store_true", help="Print OpenCV camera indices and exit")
     p.add_argument("--serial", default="", help="D405 serial; empty = first device")
@@ -67,6 +72,34 @@ def list_webcams(max_index: int = 8) -> list[tuple[int, int, int]]:
     return found
 
 
+def _webcam_hint(width: int, height: int) -> str:
+    if width == 1280 and height == 720:
+        return "likely laptop built-in (HP Wide Vision)"
+    if width == 1920 and height == 1080:
+        return "likely USB overhead (XWF-1080P)"
+    if width == 640 and height == 480:
+        return "likely D405 RGB duplicate — do not use for overhead"
+    return ""
+
+
+def resolve_webcam_index(explicit: int) -> int:
+    """Pick overhead USB cam. Index 1 is often empty on Windows; XWF-1080P is often index 2."""
+    if explicit >= 0:
+        return explicit
+    found = list_webcams()
+    if not found:
+        raise RuntimeError("No OpenCV webcams found")
+    # Drop typical laptop preview (1280x720) and low-res D405 duplicate (640x480).
+    usb = [(i, w, h) for i, w, h in found if (w, h) not in {(1280, 720), (640, 480)}]
+    pool = usb or found
+    index, width, height = max(pool, key=lambda row: row[1] * row[2])
+    print(
+        f"Auto-picked overhead webcam index={index} ({width}x{height})",
+        flush=True,
+    )
+    return index
+
+
 def open_webcam(index: int, width: int, height: int, fps: int) -> cv2.VideoCapture:
     cap = cv2.VideoCapture(index, opencv_backend())
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
@@ -91,9 +124,16 @@ def main() -> int:
         if not found:
             print("No OpenCV webcams opened. Plug in the USB camera and retry.", file=sys.stderr)
             return 1
-        print("OpenCV camera indices (use --webcam-index for the USB overhead cam, not the laptop):")
+        print("OpenCV camera indices (use --webcam-index N, or omit for auto-pick):")
         for idx, w, h in found:
-            print(f"  {idx}: {w}x{h}")
+            hint = _webcam_hint(w, h)
+            extra = f"  — {hint}" if hint else ""
+            print(f"  {idx}: {w}x{h}{extra}")
+        try:
+            auto = resolve_webcam_index(-1)
+            print(f"Auto overhead pick: index {auto}")
+        except RuntimeError:
+            pass
         return 0
 
     dump = Path(args.dump_dir) if args.dump_dir else None
@@ -121,17 +161,20 @@ def main() -> int:
     print(f"Device serial: {serial}  name={args.camera_name}", flush=True)
 
     webcam = None
+    webcam_index = -1
     if not args.no_overhead:
         try:
-            webcam = open_webcam(args.webcam_index, args.width, args.height, args.fps)
+            webcam_index = resolve_webcam_index(args.webcam_index)
+            webcam = open_webcam(webcam_index, args.width, args.height, args.fps)
         except Exception as e:
             pipeline.stop()
-            print(f"Failed to open overhead webcam index {args.webcam_index}: {e}", file=sys.stderr)
+            label = args.webcam_index if args.webcam_index >= 0 else "auto"
+            print(f"Failed to open overhead webcam ({label}): {e}", file=sys.stderr)
             print("Run: python omen\\publish_d405.py --list-webcams", file=sys.stderr)
-            print("Then: python omen\\publish_d405.py --webcam-index N", file=sys.stderr)
+            print("Then: python omen\\publish_d405.py --webcam-index N  (XWF-1080P is often 2)", file=sys.stderr)
             return 1
         print(
-            f"Overhead webcam index={args.webcam_index}  name={args.overhead_name}",
+            f"Overhead webcam index={webcam_index}  name={args.overhead_name}",
             flush=True,
         )
 
