@@ -1,4 +1,11 @@
-"""GDM-style scored real-robot eval: conditions × trials, binary y/n success."""
+"""Scored real-robot evaluation under a fixed protocol.
+
+Each trial uses a defined scene condition, the workspace is reset between
+trials, and success is judged with a binary yes/no against a written criterion.
+Repeating independent trials per condition yields overall and per-condition
+success rates (pc_success) that reflect task completion rather than training
+loss, support fair policy comparisons, and produce logs suitable for reporting.
+"""
 
 from __future__ import annotations
 

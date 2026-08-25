@@ -23,8 +23,9 @@ wrist depth while leaving approach and place to the base policy.
    upload; LeRobot used as a hardware driver only.
 2. **Multi-view + metric depth** — wrist D405 and overhead RGB streamed over ZMQ;
    depth optionally in ACT training and in a grasp-phase controller.
-3. **Protocol-based outcomes** — GDM-style eval grid (`pc_success`, `by_condition`);
-   train loss is not treated as a manipulation metric.
+3. **Protocol-based outcomes** — repeated trials per scene condition with binary
+   success labels; reports `pc_success` and per-condition breakdown instead of
+   train loss.
 4. **Hybrid depth grasp** — decouple VLA approach from analytic contact control.
 
 ## System overview

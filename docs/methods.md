@@ -72,7 +72,13 @@ Base policy (ACT or SmolVLA) controls approach and transport. When wrist depth
 
 ## Evaluation protocol
 
-Scored eval uses YAML protocols (default: `config/eval/pen_to_keys.yaml`):
+Scored eval uses YAML protocols (default: `config/eval/pen_to_keys.yaml`). Each
+trial runs under a defined scene condition; the workspace is reset between
+trials; success is judged with a binary yes/no against a written criterion.
+Repeating independent trials per condition yields overall and per-condition
+success rates that reflect real task completion rather than training loss,
+support fair comparisons across policies, and produce logs suitable for a
+thesis or paper.
 
 - **Conditions:** small grid (e.g. key position left / center / right)
 - **Trials:** independent repetitions per condition

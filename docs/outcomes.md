@@ -104,7 +104,8 @@ flowchart TD
 ### Success criterion (fixed at eval time)
 
 Keys inside the metal cup, gripper clear of the keys, nothing knocked over.
-Scoring is **binary** and **independent** across trials (GDM-style).
+Each trial is scored independently after a fresh reset, so success rates reflect
+real task completion and can be compared fairly across policies and conditions.
 
 ### Example outcome structure
 

@@ -137,7 +137,11 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--dataset", default="so101_d405_demo")
     ev.add_argument("--checkpoint", default="")
     ev.add_argument("--duration", type=float, default=60.0, help="Unscored timed run if --protocol is omitted")
-    ev.add_argument("--protocol", default="", help="YAML/JSON scored grid (GDM-style y/n trials)")
+    ev.add_argument(
+        "--protocol",
+        default="",
+        help="YAML/JSON protocol: condition grid, repeated trials, binary y/n success (see docs/outcomes.md)",
+    )
     ev.add_argument("--n-trials", type=int, default=None, help="Override protocol n_trials_per_condition")
     ev.add_argument(
         "--policy",

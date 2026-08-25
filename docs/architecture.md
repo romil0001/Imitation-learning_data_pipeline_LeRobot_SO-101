@@ -66,7 +66,7 @@ so101/
   replay.py         action replay
   train.py          ACT training
   eval.py           rollout + optional protocol
-  eval_protocol.py  GDM-style y/n grid
+  eval_protocol.py  scored protocol eval (conditions × trials, y/n success)
   convert_lerobot.py
   hybrid_policy.py  base policy + depth-grasp override
   depth_grasp.py    wrist-depth height assist

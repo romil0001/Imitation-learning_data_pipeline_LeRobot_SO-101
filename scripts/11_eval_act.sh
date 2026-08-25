@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run a trained ACT policy on the follower. Omen D405 publisher must be running.
 # Leader can be unplugged. Follower 12V + USB ON.
-# Default: GDM scored protocol (y/n per trial). Unscored timed run: PROTOCOL= bash scripts/11_eval_act.sh
+# Default: scored protocol (conditions × trials, y/n per trial). Unscored timed run: PROTOCOL= bash scripts/11_eval_act.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/_comm

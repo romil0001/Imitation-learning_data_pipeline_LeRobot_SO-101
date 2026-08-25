@@ -1,4 +1,4 @@
-"""GDM-style scored eval protocol (no real arms)."""
+"""Scored eval protocol tests (no real arms)."""
 
 from __future__ import annotations
 
