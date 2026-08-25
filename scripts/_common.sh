@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared helpers for SO-101 bring-up scripts. Source me; do not execute.
+# Shared helpers for SO-101 hardware configuration scripts. Source me; do not execute.
 
 project_root() {
   local here

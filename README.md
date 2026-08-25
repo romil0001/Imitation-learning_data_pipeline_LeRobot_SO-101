@@ -1,6 +1,6 @@
-# LeRobot SO-101 Bring-up
+# SO-101 Visuomotor Manipulation Platform
 
-Local SO-101 cell **architected by [romil0001](https://github.com/romil0001)**. Leader + follower with **12V STS3215** servos (6 each), 2 bus drivers, and an Intel RealSense **D405**. Design lives in [`docs/architecture.md`](docs/architecture.md).
+Bimanual SO-101 research stack **architected by [romil0001](https://github.com/romil0001)**: leader–follower teleoperation, visuomotor policy learning (ACT, SmolVLA), depth-assisted grasping, and scored manipulation evaluation. Leader + follower with **12V STS3215** servos (6 each), Intel RealSense **D405** wrist depth, and overhead RGB. Design: [`docs/architecture.md`](docs/architecture.md).
 
 Official arm guide: https://huggingface.co/docs/lerobot/en/so101
 
@@ -33,8 +33,8 @@ See `patches/so_leader_ids_7_12.patch` (re-applied by `env/setup_env.sh`).
 ## Clone (both machines)
 
 ```bash
-git clone git@github.com:OWNER/REPO.git
-# or: git clone https://github.com/OWNER/REPO.git
+git clone git@github.com:romil0001/so101-visuomotor-manipulation.git
+# or: git clone https://github.com/romil0001/so101-visuomotor-manipulation.git
 ```
 
 On the Omen you only need the `omen/` folder after clone.
@@ -67,7 +67,7 @@ Then on the Mac: `OMEN_HOST=192.168.1.50 bash scripts/pull_omen_dump.sh`
 
 ## Teleop, record, train, eval (Mac)
 
-Record / train / eval are the local `so101` package (`python -m so101`), not Hugging Face Hub and not `lerobot-train`. LeRobot is used only to talk to the arms and ZMQ camera. Bring-up scripts `01`–`07` still wrap LeRobot CLIs.
+Record / train / eval are the local `so101` package (`python -m so101`), not Hugging Face Hub and not `lerobot-train`. LeRobot is used only to talk to the arms and ZMQ camera. Hardware configuration scripts `01`–`07` wrap LeRobot CLIs.
 
 1. Omen publisher running
 2. `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (camera, Omen/arm status, live log; **D** refreshes status)

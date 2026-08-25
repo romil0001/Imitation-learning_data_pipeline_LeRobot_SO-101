@@ -1,8 +1,8 @@
 # Authors
 
-This repository is designed and maintained by **romil0001**.
+**SO-101 Visuomotor Manipulation Platform** — designed and maintained by **romil0001**.
 
-- GitHub: https://github.com/romil0001
+- Repository: https://github.com/romil0001/so101-visuomotor-manipulation
 - Architecture: `docs/architecture.md`
 
 LeRobot (Hugging Face) is a third-party hardware/driver dependency cloned into

@@ -106,7 +106,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="so101",
-        description="Local SO-101 record / ACT train / SmolVLA convert / hybrid eval / replay",
+        description="SO-101 visuomotor manipulation — record, ACT/SmolVLA train, hybrid eval, replay",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 

@@ -1,6 +1,4 @@
-# SO-101 Physical Checklist
-
-Architecture: [romil0001](https://github.com/romil0001) — see `docs/architecture.md`.
+# SO-101 Visuomotor Manipulation — Physical Checklist
 
 ## Stickers
 - [ ] Label bus board A **FOLLOWER**
