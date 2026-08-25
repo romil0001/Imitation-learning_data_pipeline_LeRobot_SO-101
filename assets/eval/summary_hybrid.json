@@ -1,0 +1,23 @@
+{
+  "method": "Hybrid (SmolVLA + depth grasp)",
+  "pc_success": 86.7,
+  "n_trials": 15,
+  "n_success": 13,
+  "per_condition": {
+    "keys=left": {
+      "n": 5,
+      "n_success": 5,
+      "pc_success": 100.0
+    },
+    "keys=center": {
+      "n": 5,
+      "n_success": 4,
+      "pc_success": 80.0
+    },
+    "keys=right": {
+      "n": 5,
+      "n_success": 4,
+      "pc_success": 80.0
+    }
+  }
+}

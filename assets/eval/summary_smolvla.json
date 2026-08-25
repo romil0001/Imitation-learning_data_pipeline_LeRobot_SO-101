@@ -1,0 +1,23 @@
+{
+  "method": "SmolVLA",
+  "pc_success": 66.7,
+  "n_trials": 15,
+  "n_success": 10,
+  "per_condition": {
+    "keys=left": {
+      "n": 5,
+      "n_success": 4,
+      "pc_success": 80.0
+    },
+    "keys=center": {
+      "n": 5,
+      "n_success": 3,
+      "pc_success": 60.0
+    },
+    "keys=right": {
+      "n": 5,
+      "n_success": 3,
+      "pc_success": 60.0
+    }
+  }
+}

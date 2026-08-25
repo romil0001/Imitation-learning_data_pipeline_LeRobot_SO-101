@@ -17,6 +17,12 @@ methodological detail and [`reproduction.md`](reproduction.md) for hardware setu
 Train loss (`metrics.jsonl`) is a **training diagnostic**, not a reported outcome.
 Reported manipulation performance uses **protocol eval** only.
 
+Outcome graphs (mermaid): below. **Committed result plots:** [`assets/graphs/`](../assets/graphs/).
+
+![Overall success rate](../assets/graphs/success_overall.png)
+
+![Success by condition](../assets/graphs/success_by_condition.png)
+
 ## End-to-end outcome flow
 
 ```mermaid

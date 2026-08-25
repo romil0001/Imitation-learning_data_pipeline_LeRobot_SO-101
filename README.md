@@ -28,6 +28,31 @@ wrist depth while leaving approach and place to the base policy.
    train loss.
 4. **Hybrid depth grasp** — decouple VLA approach from analytic contact control.
 
+## Visualizations
+
+### Camera views (task conditions)
+
+| Overhead — keys left | Overhead — center | Wrist approach |
+|:---:|:---:|:---:|
+| ![keys left](assets/frames/overhead_keys_left.png) | ![keys center](assets/frames/overhead_keys_center.png) | ![wrist approach](assets/frames/wrist_approach.png) |
+
+| Wrist grasp | Wrist depth (colormap) |
+|:---:|:---:|
+| ![wrist grasp](assets/frames/wrist_grasp.png) | ![wrist depth](assets/frames/wrist_depth.png) |
+
+*Illustrative frames for the public README; re-export from your dataset with
+`python scripts/generate_public_assets.py --dataset-dir data/datasets/<name>`.*
+
+### Eval success rates (pen-to-keys protocol)
+
+Example outcomes — 5 trials × 3 conditions (15 trials total):
+
+| Overall pc_success | Success by condition |
+|:---:|:---:|
+| ![overall success](assets/graphs/success_overall.png) | ![by condition](assets/graphs/success_by_condition.png) |
+
+Fixture data: [`assets/eval/`](assets/eval/). Regenerate after real eval runs — see [`assets/README.md`](assets/README.md).
+
 ## System overview
 
 ```mermaid

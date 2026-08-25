@@ -15,7 +15,7 @@ authors = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "matplotlib", "opencv-python-headless"]
 jax = ["jax", "jaxlib", "flax", "optax"]
 
 [tool.setuptools.packages.find]
