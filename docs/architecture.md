@@ -1,7 +1,8 @@
 # Architecture
 
+**Project:** SO-101 Visuomotor Manipulation Platform  
 **Author:** [romil0001](https://github.com/romil0001)  
-**Repo:** local SO-101 teleop, record, train, and eval  
+**Repository:** [so101-visuomotor-manipulation](https://github.com/romil0001/so101-visuomotor-manipulation)  
 **Not in this repo:** agent runtimes, Hub training, or cloud policy servers
 
 This stack is a two-machine, no-ROS cell. Hugging Face LeRobot talks to the
@@ -32,13 +33,13 @@ Train ACT on the Mac (MPS). Never train on the 4 GB Omen.
 - Follower motors: IDs **1–6** (shoulder_pan … gripper)
 - Leader motors: IDs **7–12** (shoulder_pan=7 … gripper=12), applied by `patches/so_leader_ids_7_12.patch`
 - Power: **12V** STS3215 only. Motor ID and calibration: one arm powered at a time
-- Bring-up scripts `01`–`07` wrap official LeRobot CLIs; they do not reimplement Feetech
+- Hardware configuration scripts `01`–`07` wrap official LeRobot CLIs; they do not reimplement Feetech
 
 Ports live in gitignored `config/ports.env`. Camera/ZMQ live in gitignored `config/camera.env`.
 
 ## Control plane
 
-`python -m so101` is the only operator CLI after bring-up.
+`python -m so101` is the only operator CLI after hardware configuration.
 
 | Command | Role |
 |---------|------|

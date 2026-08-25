@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "so101"
 version = "0.1.0"
-description = "Local SO-101 record, ACT train, eval, and replay"
+description = "SO-101 bimanual visuomotor manipulation: teleoperation, ACT/SmolVLA learning, depth grasp, eval"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

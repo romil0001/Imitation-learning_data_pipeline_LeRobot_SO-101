@@ -259,7 +259,7 @@ async def lifespan(_app: FastAPI):
     _stop.set()
 
 
-app = FastAPI(title="SO-101 operator site", lifespan=lifespan)
+app = FastAPI(title="SO-101 Visuomotor Manipulation Lab", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
