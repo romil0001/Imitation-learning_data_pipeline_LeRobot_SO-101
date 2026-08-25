@@ -12,7 +12,7 @@ load_camera
 
 DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
 NUM_EPISODES="${NUM_EPISODES:-50}"
-TASK="${TASK:-Pick pen and place it next to the keys}"
+TASK="${TASK:-Place keys into metal cup}"
 
 EXISTING="$(dataset_episode_count)"
 banner_both_arms

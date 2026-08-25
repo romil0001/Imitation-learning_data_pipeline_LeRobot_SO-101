@@ -106,6 +106,22 @@ class LatestZMQRGBD:
             z = self._depths.get(name)
             return None if z is None else z.copy()
 
+    def wait_for_depth(self, name: str, timeout_s: float = 15.0) -> np.ndarray:
+        """Block until a depth frame for ``name`` arrives (or raise)."""
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            z = self.latest_depth(name)
+            if z is not None:
+                return z
+            time.sleep(0.05)
+        with self._lock:
+            keys = sorted(self._depths.keys())
+        raise RuntimeError(
+            f"No depth frame for {name!r} within {timeout_s:.0f}s "
+            f"(seen depth keys={keys}). On the Omen, restart without --no-depth "
+            f"(normal: omen\\run_publish.bat) and confirm the dashboard wrist_depth feed is live."
+        )
+
     def close(self) -> None:
         self._stop.set()
         self._thread.join(timeout=2.0)

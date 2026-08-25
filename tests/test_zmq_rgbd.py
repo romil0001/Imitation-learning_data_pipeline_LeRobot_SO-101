@@ -21,3 +21,24 @@ def test_depth_colormap_shape() -> None:
     vis = depth_colormap_bgr(z)
     assert vis.shape == (24, 32, 3)
     assert vis.dtype == np.uint8
+
+
+def test_wait_for_depth_returns_when_present() -> None:
+    from so101.zmq_rgbd import LatestZMQRGBD
+
+    src = object.__new__(LatestZMQRGBD)
+    src._lock = __import__("threading").Lock()
+    src._depths = {"wrist": np.ones((4, 4), dtype=np.uint16)}
+    got = LatestZMQRGBD.wait_for_depth(src, "wrist", timeout_s=0.5)
+    assert got.shape == (4, 4)
+
+
+def test_wait_for_depth_timeout_message() -> None:
+    from so101.zmq_rgbd import LatestZMQRGBD
+    import pytest
+
+    src = object.__new__(LatestZMQRGBD)
+    src._lock = __import__("threading").Lock()
+    src._depths = {}
+    with pytest.raises(RuntimeError, match="No depth frame"):
+        LatestZMQRGBD.wait_for_depth(src, "wrist", timeout_s=0.15)

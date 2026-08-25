@@ -57,15 +57,25 @@
         <div class="panel-h"><h1>Hardware</h1></div>
         <ul class="kv" id="hw"></ul>
       </section>
+      <section class="panel joints">
+        <div class="panel-h">
+          <h1>Joints</h1>
+          <span id="joints-meta" class="muted">waiting for record…</span>
+        </div>
+        <div class="joint-legend">
+          <span class="lg state">state</span>
+          <span class="lg action">action</span>
+        </div>
+        <div id="joints" class="joint-list"></div>
+      </section>
       <section class="panel">
-        <div class="panel-h"><h1>Keys</h1><span class="muted">v1 observe</span></div>
+        <div class="panel-h"><h1>Keys</h1><span class="muted">dashboard viz</span></div>
         <ul class="keys">
-          <li><kbd>D</kbd> check devices / refresh status</li>
+          <li><kbd>D</kbd> refresh hardware status</li>
           <li><kbd>A</kbd> start episode — run <code>scripts/08_record.sh</code></li>
-          <li><kbd>B</kbd> failure — label in the LeRobot window</li>
-          <li><kbd>C</kbd> success — label in the LeRobot window</li>
+          <li><kbd>n</kbd> / <kbd>r</kbd> / <kbd>q</kbd> in the record terminal</li>
         </ul>
-        <p class="muted small">Teleop: <code>bash scripts/06_teleoperate.sh</code> in a Mac terminal. Keep the Omen publisher running.</p>
+        <p class="muted small">Live cameras + depth here. Joint bars update while recording. Keep Omen publisher + <code>09_dashboard.sh</code> running.</p>
       </section>
     </aside>
 

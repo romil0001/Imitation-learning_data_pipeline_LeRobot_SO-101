@@ -1,4 +1,4 @@
-"""python -m so101 {record,train,eval,replay,inspect}"""
+"""python -m so101 {record,train,eval,replay,inspect,convert}"""
 
 from __future__ import annotations
 
@@ -26,9 +26,10 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         print(stats_path.read_text())
     for i in range(ds.meta.episode_count):
         ep = ds.load_episode(i)
-        print(f"episode {i:06d}  frames={ep.num_frames}  videos={sorted((ep.video_paths or {ep.camera_name: ep.video_path}).keys())}" + (
-            f"  depth={ep.depth_path.name}" if ep.depth_path else ""
-        ))
+        print(
+            f"episode {i:06d}  frames={ep.num_frames}  videos={sorted((ep.video_paths or {ep.camera_name: ep.video_path}).keys())}"
+            + (f"  depth={ep.depth_path.name}" if ep.depth_path else "")
+        )
     return 0
 
 
@@ -77,18 +78,42 @@ def cmd_eval(args: argparse.Namespace) -> int:
         confirm=not args.yes,
         protocol=args.protocol,
         n_trials=args.n_trials,
+        policy=args.policy,
+        policy_base=args.policy_base,
+        grasp_config=args.grasp_config,
+        task=args.task,
     )
     return 0
 
 
+def cmd_convert(args: argparse.Namespace) -> int:
+    from so101.config import project_root
+    from so101.convert_lerobot import convert_so101_to_lerobot
+
+    root = project_root()
+    src = Path(args.dataset_dir) if args.dataset_dir else _dataset_dir(args.dataset)
+    dest = Path(args.output_dir) if args.output_dir else root / "data" / "lerobot" / args.dataset
+    meta = convert_so101_to_lerobot(
+        src,
+        dest,
+        repo_id=args.repo_id or f"local/{args.dataset}",
+        max_episodes=args.max_episodes,
+    )
+    print(json.dumps(meta, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="so101", description="Local SO-101 record / ACT train / eval / replay")
+    p = argparse.ArgumentParser(
+        prog="so101",
+        description="Local SO-101 record / ACT train / SmolVLA convert / hybrid eval / replay",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     rec = sub.add_parser("record", help="Collect teleop episodes")
     rec.add_argument("--dataset", default="so101_d405_demo")
     rec.add_argument("--num-episodes", type=int, default=50)
-    rec.add_argument("--task", default="Pick pen and place it next to the keys")
+    rec.add_argument("--task", default="Place keys into metal cup")
     rec.add_argument("-y", "--yes", action="store_true", help="Skip hardware confirm prompt")
     rec.set_defaults(func=cmd_record)
 
@@ -108,14 +133,40 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tr.set_defaults(func=cmd_train)
 
-    ev = sub.add_parser("eval", help="Run a trained ACT policy on the follower")
+    ev = sub.add_parser("eval", help="Run ACT / SmolVLA / hybrid (SmolVLA+depth grasp)")
     ev.add_argument("--dataset", default="so101_d405_demo")
     ev.add_argument("--checkpoint", default="")
     ev.add_argument("--duration", type=float, default=60.0, help="Unscored timed run if --protocol is omitted")
     ev.add_argument("--protocol", default="", help="YAML/JSON scored grid (GDM-style y/n trials)")
     ev.add_argument("--n-trials", type=int, default=None, help="Override protocol n_trials_per_condition")
+    ev.add_argument(
+        "--policy",
+        choices=("act", "smolvla", "hybrid"),
+        default="act",
+        help="act | smolvla | hybrid (base policy + depth grasp)",
+    )
+    ev.add_argument(
+        "--policy-base",
+        choices=("act", "smolvla"),
+        default="smolvla",
+        help="For --policy hybrid: which base policy to wrap",
+    )
+    ev.add_argument(
+        "--grasp-config",
+        default="",
+        help="YAML/JSON for depth grasp (default: built-in; recommend config/hybrid_grasp.yaml)",
+    )
+    ev.add_argument("--task", default="", help="Language task for SmolVLA (defaults to protocol.task)")
     ev.add_argument("-y", "--yes", action="store_true")
     ev.set_defaults(func=cmd_eval)
+
+    conv = sub.add_parser("convert", help="Convert local SO101 dataset → LeRobot (for SmolVLA)")
+    conv.add_argument("--dataset", default="so101_d405_demo")
+    conv.add_argument("--dataset-dir", default="")
+    conv.add_argument("--output-dir", default="", help="Default: data/lerobot/<dataset>")
+    conv.add_argument("--repo-id", default="", help="LeRobot repo_id (default local/<dataset>)")
+    conv.add_argument("--max-episodes", type=int, default=None)
+    conv.set_defaults(func=cmd_convert)
 
     rp = sub.add_parser("replay", help="Replay one episode on the follower")
     rp.add_argument("--dataset", default="so101_d405_demo")

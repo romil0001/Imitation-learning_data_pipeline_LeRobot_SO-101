@@ -6,8 +6,12 @@ const logEl = document.getElementById("log");
 const camName = document.getElementById("cam-name-overhead");
 const camMeta = document.getElementById("cam-meta");
 const toastEl = document.getElementById("toast");
+const jointsEl = document.getElementById("joints");
+const jointsMeta = document.getElementById("joints-meta");
+const jointsPanel = document.querySelector(".panel.joints");
 
 let toastTimer = 0;
+let jointRows = null;
 
 function toast(msg) {
   toastEl.hidden = false;
@@ -38,6 +42,63 @@ function row(k, v, ok) {
   const vk = ok === true ? "ok" : ok === false ? "bad" : "";
   li.innerHTML = `<span class="k">${k}</span><span class="v ${vk}">${v}</span>`;
   return li;
+}
+
+function normPct(v) {
+  // Feetech body joints ~[-100,100] or degrees; gripper ~[0,100]. Map to bar width.
+  const x = Number(v) || 0;
+  const pct = ((x + 100) / 200) * 100;
+  return Math.max(0, Math.min(100, pct));
+}
+
+function ensureJointRows(names) {
+  if (jointRows && jointRows.length === names.length) return;
+  jointsEl.replaceChildren();
+  jointRows = names.map((name) => {
+    const row = document.createElement("div");
+    row.className = "joint-row";
+    row.innerHTML = `
+      <span class="name">${name}</span>
+      <div class="joint-bars">
+        <div class="bar-track"><div class="bar-fill state"></div></div>
+        <div class="bar-track"><div class="bar-fill action"></div></div>
+      </div>
+      <span class="vals">—</span>`;
+    jointsEl.appendChild(row);
+    return {
+      stateFill: row.querySelector(".bar-fill.state"),
+      actionFill: row.querySelector(".bar-fill.action"),
+      vals: row.querySelector(".vals"),
+    };
+  });
+}
+
+async function refreshJoints() {
+  const r = await fetch("/api/joints");
+  const j = await r.json();
+  const names = j.names || [];
+  if (!names.length) {
+    jointsMeta.textContent = "waiting for record…";
+    jointsPanel.classList.add("stale");
+    return;
+  }
+  ensureJointRows(names);
+  const state = j.state || [];
+  const action = j.action || [];
+  jointRows.forEach((row, i) => {
+    const s = state[i];
+    const a = action[i];
+    row.stateFill.style.width = `${normPct(s)}%`;
+    row.actionFill.style.width = `${normPct(a)}%`;
+    row.vals.textContent = `${Number(s).toFixed(1)} / ${Number(a).toFixed(1)}`;
+  });
+  if (j.fresh) {
+    jointsMeta.textContent = "live";
+    jointsPanel.classList.remove("stale");
+  } else {
+    jointsMeta.textContent = j.age_s != null ? `stale ${j.age_s}s` : "stale";
+    jointsPanel.classList.add("stale");
+  }
 }
 
 async function refresh() {
@@ -101,21 +162,21 @@ document.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (k === "d") {
     e.preventDefault();
-    refresh().then(() => toast("Status refreshed (D)")).catch(() => toast("Status check failed"));
+    Promise.all([refresh(), refreshJoints()])
+      .then(() => toast("Status refreshed (D)"))
+      .catch(() => toast("Status check failed"));
   } else if (k === "a") {
     e.preventDefault();
-    toast("v1: start recording in a terminal — bash scripts/08_record.sh");
-  } else if (k === "b") {
-    e.preventDefault();
-    toast("v1: mark failure in the LeRobot record window");
-  } else if (k === "c") {
-    e.preventDefault();
-    toast("v1: mark success in the LeRobot record window");
+    toast("Start recording in a terminal — bash scripts/08_record.sh");
   }
 });
 
 bindLogs();
 refresh();
+refreshJoints().catch(() => {});
 setInterval(() => {
   refresh().catch(() => {});
 }, 1000);
+setInterval(() => {
+  refreshJoints().catch(() => {});
+}, 100);

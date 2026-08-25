@@ -8,6 +8,7 @@ third_party/lerobot/
 # Session logs, dumps, datasets
 outputs/
 data/datasets/
+data/lerobot/
 
 # Python / OS
 __pycache__/

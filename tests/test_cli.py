@@ -43,3 +43,31 @@ def test_train_parser_gdm_flags() -> None:
     assert args.val_frac == 0.2
     assert args.seed == 0
     assert args.eval_every == 1000
+
+
+def test_eval_parser_hybrid_flags() -> None:
+    args = build_parser().parse_args(
+        [
+            "eval",
+            "--policy",
+            "hybrid",
+            "--policy-base",
+            "act",
+            "--grasp-config",
+            "config/hybrid_grasp.yaml",
+            "--task",
+            "Place keys into metal cup",
+        ]
+    )
+    assert args.policy == "hybrid"
+    assert args.policy_base == "act"
+    assert args.grasp_config.endswith("hybrid_grasp.yaml")
+    assert "keys" in args.task
+
+
+def test_convert_parser() -> None:
+    args = build_parser().parse_args(
+        ["convert", "--dataset", "so101_d405_demo", "--max-episodes", "2"]
+    )
+    assert args.dataset == "so101_d405_demo"
+    assert args.max_episodes == 2

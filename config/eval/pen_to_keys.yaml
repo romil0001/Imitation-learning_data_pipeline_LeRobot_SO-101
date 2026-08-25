@@ -1,24 +1,24 @@
-task: Pick pen and place it next to the keys
+task: Place keys into metal cup
 timeout_s: 60
 n_trials_per_condition: 5
 # If omitted, home is the mean of episode state[0] in the eval dataset.
 home_steps: 80
 home_dt: 0.04
 success_criterion: >
-  Pen is in the keys zone, gripper is clear of the pen, and nothing was
+  Keys are inside the metal cup, gripper is clear of the keys, and nothing was
   knocked over.
 conditions:
-  - id: pen=left
+  - id: keys=left
     pen: left
     lighting: overhead
     distractors: none
     split: id
-  - id: pen=center
+  - id: keys=center
     pen: center
     lighting: overhead
     distractors: none
     split: id
-  - id: pen=right
+  - id: keys=right
     pen: right
     lighting: overhead
     distractors: none
