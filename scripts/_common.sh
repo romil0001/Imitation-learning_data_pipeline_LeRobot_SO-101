@@ -93,8 +93,8 @@ require_leader_port_exists() {
   return 0
 }
 
-# Cursor/IDE often leave a project .venv on PATH ahead of conda. Drop it so
-# `python` is the lerobot env (pyzmq, torch, Hugging Face lerobot).
+# A project .venv on PATH can sit ahead of conda. Drop it so `python` is the
+# lerobot env (pyzmq, torch, Hugging Face lerobot).
 drop_active_venv() {
   if [[ -z "${VIRTUAL_ENV:-}" ]]; then
     return 0

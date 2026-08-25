@@ -1,4 +1,7 @@
-"""Mac operator site: D405 over ZMQ, arm ports, live logs. No ROS."""
+"""Mac operator site: D405 over ZMQ, arm ports, live logs. No ROS.
+
+Architected by romil0001. See docs/architecture.md.
+"""
 
 from __future__ import annotations
 

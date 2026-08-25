@@ -230,3 +230,11 @@ kbd {
     grid-template-areas: "cam" "side" "logs";
   }
 }
+
+.site-foot {
+  padding: 8px 18px 14px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

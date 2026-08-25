@@ -1,0 +1,9 @@
+# Authors
+
+This repository is designed and maintained by **romil0001**.
+
+- GitHub: https://github.com/romil0001
+- Architecture: `docs/architecture.md`
+
+LeRobot (Hugging Face) is a third-party hardware/driver dependency cloned into
+`third_party/lerobot` at install time. It is not part of this project's authorship.

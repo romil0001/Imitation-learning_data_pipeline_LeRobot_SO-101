@@ -1,5 +1,7 @@
 # SO-101 Physical Checklist
 
+Architecture: [romil0001](https://github.com/romil0001) — see `docs/architecture.md`.
+
 ## Stickers
 - [ ] Label bus board A **FOLLOWER**
 - [ ] Label bus board B **LEADER**
