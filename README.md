@@ -30,18 +30,14 @@ wrist depth while leaving approach and place to the base policy.
 
 ## Visualizations
 
-### Camera views (task conditions)
+### Real-robot observations
 
-| Overhead — keys left | Overhead — center | Wrist approach |
-|:---:|:---:|:---:|
-| ![keys left](assets/frames/overhead_keys_left.png) | ![keys center](assets/frames/overhead_keys_center.png) | ![wrist approach](assets/frames/wrist_approach.png) |
-
-| Wrist grasp | Wrist depth (colormap) |
+| Overhead (scene) | Wrist (ego) |
 |:---:|:---:|
-| ![wrist grasp](assets/frames/wrist_grasp.png) | ![wrist depth](assets/frames/wrist_depth.png) |
+| ![Overhead view of SO-101 gripper, metal cup, and keys](assets/frames/overhead_real.jpg) | ![Wrist camera view toward keys and cup](assets/frames/wrist_real.jpg) |
 
-*Illustrative frames for the public README; re-export from your dataset with
-`python scripts/generate_public_assets.py --dataset-dir data/datasets/<name>`.*
+Task scene: SO-101 follower gripper, stainless cup, and key ring on the table — the
+pen-to-keys / keys-into-cup manipulation setup used for teleop demos and protocol eval.
 
 ### Eval success rates (pen-to-keys protocol)
 

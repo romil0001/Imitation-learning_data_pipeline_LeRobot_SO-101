@@ -4,11 +4,15 @@ Committed figures for the GitHub README and documentation.
 
 ## Camera frames (`frames/`)
 
-Illustrative synthetic views of the pen-to-keys task (overhead layout + wrist
-approach/grasp + depth colormap). They match the eval conditions in
-`config/eval/pen_to_keys.yaml`.
+**Real-robot photos (committed):**
 
-Replace with real recordings:
+- `overhead_real.jpg` — scene view: gripper, metal cup, keys
+- `wrist_real.jpg` — ego / wrist view looking toward the workspace
+
+Illustrative synthetic layouts (optional condition sketches) may also appear from
+`scripts/generate_public_assets.py`. Prefer the real photos for the README.
+
+Replace or add more from recordings:
 
 ```bash
 python scripts/generate_public_assets.py --dataset-dir data/datasets/so101_d405_demo
