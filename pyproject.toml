@@ -6,7 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "so101"
 version = "0.1.0"
 description = "Local SO-101 record, ACT train, eval, and replay"
+readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "romil0001", email = "romil2002modi@gmail.com" },
+]
 dependencies = []
 
 [project.optional-dependencies]

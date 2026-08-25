@@ -1,6 +1,6 @@
 # LeRobot SO-101 Bring-up
 
-Leader + follower SO-101 with **12V STS3215** servos (6 each), 2 bus drivers, and an Intel RealSense **D405**.
+Local SO-101 cell **architected by [romil0001](https://github.com/romil0001)**. Leader + follower with **12V STS3215** servos (6 each), 2 bus drivers, and an Intel RealSense **D405**. Design lives in [`docs/architecture.md`](docs/architecture.md).
 
 Official arm guide: https://huggingface.co/docs/lerobot/en/so101
 
@@ -113,4 +113,4 @@ python -m so101 eval --policy hybrid --policy-base act --grasp-config config/hyb
 ```
 
 ## Quick start
-See `docs/checklist.md`.
+See `docs/checklist.md`. Architecture and module map: `docs/architecture.md`.
