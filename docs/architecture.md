@@ -2,7 +2,7 @@
 
 **Project:** SO-101 Visuomotor Manipulation Platform  
 **Author:** [romil0001](https://github.com/romil0001)  
-**Repository:** [so101-visuomotor-manipulation](https://github.com/romil0001/so101-visuomotor-manipulation)
+**Repository:** [SO101_Visuomotor_Manipulation](https://github.com/romil0001/SO101_Visuomotor_Manipulation)
 
 Research docs: [`methods.md`](methods.md) · [`outcomes.md`](outcomes.md) · [`reproduction.md`](reproduction.md)
 

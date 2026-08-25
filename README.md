@@ -69,8 +69,8 @@ flowchart LR
 ## Quick reproduction
 
 ```bash
-git clone https://github.com/romil0001/so101-visuomotor-manipulation.git
-cd so101-visuomotor-manipulation
+git clone https://github.com/romil0001/SO101_Visuomotor_Manipulation.git
+cd SO101_Visuomotor_Manipulation
 bash env/setup_env.sh
 # configure config/ports.env and config/camera.env — see docs/reproduction.md
 bash scripts/08_record.sh
@@ -99,7 +99,7 @@ If you use this platform, please cite:
   author = {Modi, Romil},
   title = {SO-101 Visuomotor Manipulation Platform},
   year = {2026},
-  url = {https://github.com/romil0001/so101-visuomotor-manipulation}
+  url = {https://github.com/romil0001/SO101_Visuomotor_Manipulation}
 }
 ```
 

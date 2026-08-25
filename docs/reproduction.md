@@ -8,8 +8,8 @@ Official arm reference: https://huggingface.co/docs/lerobot/en/so101
 ## Clone
 
 ```bash
-git clone git@github.com:romil0001/so101-visuomotor-manipulation.git
-cd so101-visuomotor-manipulation
+git clone git@github.com:romil0001/SO101_Visuomotor_Manipulation.git
+cd SO101_Visuomotor_Manipulation
 ```
 
 On the Windows sensing node, only `omen/` is required after clone.

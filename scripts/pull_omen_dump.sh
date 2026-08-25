@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OMEN_USER="${OMEN_USER:-romil}"
 OMEN_HOST="${OMEN_HOST:?Set OMEN_HOST to the Windows PC LAN IP}"
-OMEN_DUMP="${OMEN_DUMP:-C:/Users/${OMEN_USER}/Developer/so101-visuomotor-manipulation/outputs/d405_dump}"
+OMEN_DUMP="${OMEN_DUMP:-C:/Users/${OMEN_USER}/Developer/SO101_Visuomotor_Manipulation/outputs/d405_dump}"
 DEST="${DEST:-$ROOT/outputs/d405_dump}"
 mkdir -p "$DEST"
 # Windows OpenSSH: use a POSIX-ish path if you installed Git/OpenSSH.
