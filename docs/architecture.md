@@ -2,8 +2,9 @@
 
 **Project:** SO-101 Visuomotor Manipulation Platform  
 **Author:** [romil0001](https://github.com/romil0001)  
-**Repository:** [so101-visuomotor-manipulation](https://github.com/romil0001/so101-visuomotor-manipulation)  
-**Not in this repo:** agent runtimes, Hub training, or cloud policy servers
+**Repository:** [so101-visuomotor-manipulation](https://github.com/romil0001/so101-visuomotor-manipulation)
+
+Research docs: [`methods.md`](methods.md) · [`outcomes.md`](outcomes.md) · [`reproduction.md`](reproduction.md)
 
 This stack is a two-machine, no-ROS cell. Hugging Face LeRobot talks to the
 arms and (optionally) cameras. Everything else — dataset format, ACT, scored

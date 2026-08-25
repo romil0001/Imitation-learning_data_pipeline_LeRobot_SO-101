@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+title: SO-101 Visuomotor Manipulation Platform
+message: >-
+  If you use this software, please cite it using the metadata from this file.
+type: software
+authors:
+  - given-names: Romil
+    family-names: Modi
+    email: romil2002modi@gmail.com
+    github: romil0001
+repository-code: https://github.com/romil0001/so101-visuomotor-manipulation
+url: https://github.com/romil0001/so101-visuomotor-manipulation
+license: MIT
+keywords:
+  - visuomotor manipulation
+  - imitation learning
+  - bimanual teleoperation
+  - action chunking transformer
+  - depth-assisted grasping
+  - SO-101
+abstract: >-
+  A distributed bimanual manipulation research platform for the SO-101 arm pair:
+  leader-follower teleoperation, multi-view RGB and metric wrist depth, offline
+  ACT and SmolVLA policy learning, depth-assisted hybrid grasping, and
+  protocol-based manipulation evaluation with per-condition success rates.

@@ -1,5 +1,7 @@
 # SO-101 Visuomotor Manipulation — Physical Checklist
 
+Lab safety and power rules. Research methods: [`methods.md`](methods.md).
+
 ## Stickers
 - [ ] Label bus board A **FOLLOWER**
 - [ ] Label bus board B **LEADER**
