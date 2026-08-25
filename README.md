@@ -72,7 +72,7 @@ Record / train / eval are the local `so101` package (`python -m so101`), not Hug
 1. Omen publisher running
 2. `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (camera, Omen/arm status, live log; **D** refreshes status)
 3. Other terminal: `bash scripts/06_teleoperate.sh`
-4. Record demos: `bash scripts/08_record.sh` (~50 episodes; **n** save, **r** redo, **q** quit). Data lands in `data/datasets/so101_d405_demo/`
+4. Record demos: `bash scripts/08_record.sh` (~50 episodes; **n** save, **r** redo, **q** quit). Live viz is the **dashboard** (cameras, depth, joint bars). Data lands in `data/datasets/so101_d405_demo/`
 5. Train ACT on the **Mac**: `bash scripts/10_train_act.sh` (Apple MPS; never the 4 GB Omen)
 6. Autonomous eval: Omen publisher + follower only → `bash scripts/11_eval_act.sh` (scored grid; **y**/**n** after each trial)
 
@@ -88,13 +88,29 @@ python -m so101 eval --duration 60
 python -m so101 replay --episode 0
 ```
 
-Default eval is a Google DeepMind-style protocol: binary success, independent trials, small condition grid (`config/eval/pen_to_keys.yaml` — pen left/center/right). After each rollout (or during it to stop early) score **y** success / **n** fail (`s`/`f` aliases). Logs: `outputs/eval/<checkpoint_name>/<run_id>/` (`protocol.json`, `summary.json` with `pc_success`, `trials/0001/`). Per-trial reset prompts still wait for Enter; `--yes` only skips the initial hardware confirm. Unscored timed run: `python -m so101 eval --duration 60` or `PROTOCOL= bash scripts/11_eval_act.sh`.
+Default eval is a Google DeepMind-style protocol: binary success, independent trials, small condition grid (`config/eval/pen_to_keys.yaml` — keys left/center/right). After each rollout (or during it to stop early) score **y** success / **n** fail (`s`/`f` aliases). Logs: `outputs/eval/<checkpoint_name>/<run_id>/` (`protocol.json`, `summary.json` with `pc_success`, `trials/0001/`). Per-trial reset prompts still wait for Enter; `--yes` only skips the initial hardware confirm. Unscored timed run: `python -m so101 eval --duration 60` or `PROTOCOL= bash scripts/11_eval_act.sh`.
 
 RGB from the Omen ZMQ stream is stored per episode as `wrist.mp4` (D405) and `overhead.mp4` (USB webcam). With `CAMERA_USE_DEPTH=true`, metric wrist depth is streamed over ZMQ and saved as `wrist_depth.npy` (uint16 mm, aligned to color).
 
 ACT (Action Chunking Transformer) copies your teleop demos. Same scene, same task string, same camera config at record and eval. Training holds out episodes (`val_frac=0.2`, `--seed`) and logs offline `val_l1`; **train loss is not the score**. Checkpoints: `outputs/train/act_so101_d405_demo/` (`config.json`, `split.json`, `stats.json`, `metrics.jsonl`, `last/model.pt`, `best_val/model.pt`). Protocol eval loads `best_val` when present (`python -m so101 eval --protocol ...`).
 
 When `use_depth` is set in the dataset, ACT trains on RGB + wrist depth (metric uint16, normalized). Eval subscribes to the same ZMQ depth stream. Optional JAX backend: `python -m so101 train --backend jax` (Flax, `tiny` backbone; install `pip install -e ".[jax]"`).
+
+## SmolVLA + depth grasp (hybrid)
+
+SmolVLA handles overall pick-and-place (RGB + language). Wrist depth is **not** fed into SmolVLA; a separate depth-grasp controller takes over near contact for accurate height, then hands control back for lift/place.
+
+1. Convert existing demos (drops depth from the export): `bash scripts/13_convert_lerobot.sh` → `data/lerobot/so101_d405_demo/`
+2. Fine-tune SmolVLA (**CUDA recommended**): `bash scripts/14_train_smolvla.sh`
+3. Hybrid eval (Omen RGB+depth streaming): `bash scripts/15_eval_hybrid.sh`
+
+Tune grasp thresholds in `config/hybrid_grasp.yaml`. You can try depth-grasp with ACT today (no SmolVLA checkpoint yet):
+
+```bash
+POLICY_BASE=act bash scripts/15_eval_hybrid.sh
+# or:
+python -m so101 eval --policy hybrid --policy-base act --grasp-config config/hybrid_grasp.yaml --protocol config/eval/pen_to_keys.yaml -y
+```
 
 ## Quick start
 See `docs/checklist.md`.

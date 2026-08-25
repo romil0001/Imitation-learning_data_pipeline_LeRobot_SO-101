@@ -159,3 +159,36 @@ def test_record_two_cameras(tmp_path: Path) -> None:
     ep = SO101Dataset(tmp_path).load_episode(0)
     assert ep.load_frames("wrist").shape[0] == 2
     assert ep.load_frames("overhead").shape[0] == 2
+
+
+def test_empty_dataset_meta_can_be_rewritten(tmp_path: Path) -> None:
+    old = DatasetMeta(
+        name="unit_demo",
+        fps=15,
+        joint_names=list(JOINT_NAMES),
+        camera_name="front",
+        camera_names=("front",),
+        camera_width=32,
+        camera_height=24,
+        task="old",
+        episode_count=0,
+        use_depth=False,
+    )
+    SO101Dataset.create(tmp_path, old)
+    fresh = DatasetMeta(
+        name="unit_demo",
+        fps=15,
+        joint_names=list(JOINT_NAMES),
+        camera_name="wrist",
+        camera_names=("wrist", "overhead"),
+        camera_width=32,
+        camera_height=24,
+        task="Place keys into metal cup",
+        episode_count=0,
+        use_depth=True,
+        depth_camera_name="wrist",
+    )
+    ds = SO101Dataset.create(tmp_path, fresh)
+    assert list(ds.meta.names()) == ["wrist", "overhead"]
+    assert ds.meta.use_depth is True
+    assert ds.meta.episode_count == 0

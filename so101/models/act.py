@@ -126,14 +126,19 @@ class ACT(nn.Module):
         )
         self.decoder = nn.TransformerDecoder(dec_layer, num_layers=cfg.n_decoder_layers)
         self.action_head = nn.Linear(cfg.dim_model, cfg.n_joints)
-        self.enc_pos = nn.Parameter(torch.randn(1, 256, cfg.dim_model) * 0.02)
+        # Long enough for multi-cam ResNet maps; resized on the fly if needed.
+        self.enc_pos = nn.Parameter(torch.randn(1, 512, cfg.dim_model) * 0.02)
         self.latent_pos = nn.Parameter(torch.randn(1, 1 + cfg.chunk_size, cfg.dim_model) * 0.02)
         self.dec_queries = nn.Parameter(torch.randn(1, cfg.chunk_size, cfg.dim_model) * 0.02)
         if cfg.use_depth:
+            # Pool to the same spatial grid as the RGB backbone tokens (e.g. 7x7 for ResNet18@224).
             self.depth_encoder = nn.Sequential(
                 nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(32, cfg.dim_model, kernel_size=3, stride=2, padding=1),
+                nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(64, cfg.dim_model, kernel_size=3, stride=2, padding=1),
+                nn.ReLU(inplace=True),
             )
         else:
             self.depth_encoder = None
@@ -150,16 +155,32 @@ class ACT(nn.Module):
         if depth is not None:
             if self.depth_encoder is None:
                 raise ValueError("depth provided but ACTConfig.use_depth is false")
+            import torch.nn.functional as F
+
             d_feat = self.depth_encoder(depth.unsqueeze(1))
+            # Match one camera's spatial size so depth doesn't explode the sequence length.
+            cam_h, cam_w = feat.shape[-2], feat.shape[-1]
+            d_feat = F.adaptive_avg_pool2d(d_feat, (cam_h, cam_w))
             d_tokens = d_feat.flatten(2).transpose(1, 2)
             img_tokens = torch.cat([img_tokens, d_tokens], dim=1)
         return img_tokens
+
+    @staticmethod
+    def _add_pos(tokens: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
+        n = tokens.size(1)
+        if n <= pos.size(1):
+            return tokens + pos[:, :n]
+        import torch.nn.functional as F
+
+        # (1, L, D) -> (1, D, L) interpolate along length, then back.
+        grown = F.interpolate(pos.transpose(1, 2), size=n, mode="linear", align_corners=False)
+        return tokens + grown.transpose(1, 2)
 
     def encode_latent(self, state: torch.Tensor, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         state_tok = self.state_proj(state).unsqueeze(1)
         act_tok = self.action_proj(actions)
         tokens = torch.cat([state_tok, act_tok], dim=1)
-        tokens = tokens + self.latent_pos[:, : tokens.size(1)]
+        tokens = self._add_pos(tokens, self.latent_pos)
         hid = self.latent_encoder(tokens)
         cls = hid[:, 0]
         return self.mu(cls), self.logvar(cls).clamp(-10, 10)
@@ -185,7 +206,7 @@ class ACT(nn.Module):
             kl = state.new_zeros(())
         z_tok = self.z_proj(z).unsqueeze(1)
         enc = torch.cat([z_tok, state_tok, img_tokens], dim=1)
-        enc = enc + self.enc_pos[:, : enc.size(1)]
+        enc = self._add_pos(enc, self.enc_pos)
         memory = self.encoder(enc)
         queries = self.dec_queries.expand(b, -1, -1)
         dec = self.decoder(queries, memory)

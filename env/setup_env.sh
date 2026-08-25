@@ -31,7 +31,7 @@ else
 fi
 
 cd "$LEROBOT_DIR"
-pip install -e ".[feetech,hardware,intelrealsense,core_scripts,training]"
+pip install -e ".[feetech,hardware,intelrealsense,core_scripts,training,smolvla]"
 pip install pyzmq fastapi uvicorn pytest
 pip install -e "$ROOT"
 

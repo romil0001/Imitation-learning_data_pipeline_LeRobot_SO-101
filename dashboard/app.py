@@ -291,8 +291,18 @@ def api_status():
         },
         "arms": arm_status(),
         "v1": True,
-        "hint": "v1 observes only — start teleop/record in a Mac terminal",
+        "hint": "Dashboard is the live viz — cameras/depth here; joints while recording",
     }
+
+
+@app.get("/api/joints")
+def api_joints():
+    from so101.live_viz import read_live_joints
+
+    data = read_live_joints()
+    if data is None:
+        return {"fresh": False, "names": [], "state": [], "action": [], "age_s": None}
+    return data
 
 
 @app.get("/api/log")

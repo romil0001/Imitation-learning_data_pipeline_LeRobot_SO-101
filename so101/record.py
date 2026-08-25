@@ -46,12 +46,15 @@ def run_record_loop(
         obs = follower.get_observation()
         action = leader.get_action()
         sent = follower.send_action(action)
+        depth_u16 = None
+        if dataset.meta.use_depth and depth_source is not None:
+            depth_u16 = depth_source.latest_depth(depth_camera_name)
+            if depth_u16 is None and phase == "record":
+                depth_u16 = depth_source.wait_for_depth(depth_camera_name, timeout_s=2.0)
         if phase == "record":
-            depth_u16 = None
             if dataset.meta.use_depth:
                 if depth_source is None:
                     raise RuntimeError("depth_source required when recording with use_depth")
-                depth_u16 = depth_source.latest_depth(depth_camera_name)
                 if depth_u16 is None:
                     raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
             writer.add_frame(
@@ -60,6 +63,12 @@ def run_record_loop(
                 timestamp=time.time(),
                 images={name: rgb_from_obs(obs, name) for name in names},
                 depth_u16=depth_u16,
+            )
+            from so101.live_viz import publish_live_joints
+
+            publish_live_joints(
+                qpos_from_obs(obs),
+                qpos_from_obs(sent if sent is not None else action),
             )
         key = keys.poll()
         if phase == "record":
@@ -97,7 +106,7 @@ def record_from_env(
     *,
     dataset_name: str = "so101_d405_demo",
     num_episodes: int = 50,
-    task: str = "Pick pen and place it next to the keys",
+    task: str = "Place keys into metal cup",
     confirm: bool = True,
 ) -> int:
     from so101.config import load_cameras, load_ports, project_root
@@ -112,28 +121,38 @@ def record_from_env(
     use_depth = cam0.use_depth and cam0.backend == "zmq"
     depth_name = cam0.name if use_depth else "wrist"
     root = project_root() / "data" / "datasets" / dataset_name
+    fresh_meta = DatasetMeta(
+        name=dataset_name,
+        fps=cam0.fps,
+        joint_names=list(JOINT_NAMES),
+        camera_name=names[0],
+        camera_names=tuple(names),
+        camera_width=cam0.width,
+        camera_height=cam0.height,
+        task=task,
+        episode_count=0,
+        use_depth=use_depth,
+        depth_camera_name=depth_name,
+    )
     if (root / "meta.json").is_file():
         dataset = SO101Dataset(root)
-        use_depth = dataset.meta.use_depth
-        depth_name = dataset.meta.depth_camera_name
-        print(f"Resuming {root} with {dataset.meta.episode_count} episodes", flush=True)
+        if dataset.meta.episode_count == 0:
+            dataset = SO101Dataset.create(root, fresh_meta)
+            print(f"Reset empty dataset meta at {root} → cameras={list(names)} depth={use_depth}", flush=True)
+        else:
+            stored = list(dataset.meta.names())
+            if stored != names or bool(dataset.meta.use_depth) != bool(use_depth):
+                raise ValueError(
+                    f"Dataset at {root} has cameras={stored} use_depth={dataset.meta.use_depth} "
+                    f"but camera.env has cameras={names} use_depth={use_depth}. "
+                    "Delete the dataset folder or pick a new --dataset name before changing cameras."
+                )
+            use_depth = dataset.meta.use_depth
+            depth_name = dataset.meta.depth_camera_name
+            names = stored
+            print(f"Resuming {root} with {dataset.meta.episode_count} episodes", flush=True)
     else:
-        dataset = SO101Dataset.create(
-            root,
-            DatasetMeta(
-                name=dataset_name,
-                fps=cam0.fps,
-                joint_names=list(JOINT_NAMES),
-                camera_name=names[0],
-                camera_names=tuple(names),
-                camera_width=cam0.width,
-                camera_height=cam0.height,
-                task=task,
-                episode_count=0,
-                use_depth=use_depth,
-                depth_camera_name=depth_name,
-            ),
-        )
+        dataset = SO101Dataset.create(root, fresh_meta)
     remaining = num_episodes - dataset.meta.episode_count
     if remaining < 1:
         print(f"Already have {dataset.meta.episode_count} episodes (target {num_episodes})")
@@ -144,6 +163,7 @@ def record_from_env(
     print(f"Cameras: {', '.join(names)}  {cam0.width}x{cam0.height}@{cam0.fps}")
     if use_depth:
         print(f"Depth: {depth_name} uint16 from ZMQ (Omen publisher must not use --no-depth)")
+    print("Live preview: dashboard http://127.0.0.1:8080  (cameras, depth, joint graphs)", flush=True)
     if confirm:
         input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
 
@@ -156,6 +176,9 @@ def record_from_env(
         from so101.zmq_rgbd import LatestZMQRGBD
 
         depth_source = LatestZMQRGBD(cam0.zmq_host, cam0.zmq_port)
+        print(f"Waiting for wrist depth from {cam0.zmq_host}:{cam0.zmq_port} ...", flush=True)
+        depth_source.wait_for_depth(depth_name, timeout_s=20.0)
+        print("Depth stream OK", flush=True)
     try:
         with StdinKeys() as keys:
             saved = run_record_loop(

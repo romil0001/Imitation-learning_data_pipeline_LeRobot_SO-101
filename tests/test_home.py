@@ -32,7 +32,7 @@ class StubPolicy:
     def reset(self) -> None:
         return None
 
-    def select_action(self, image_rgb: np.ndarray, state: np.ndarray) -> np.ndarray:
+    def select_action(self, image_rgb: np.ndarray, state: np.ndarray, depth_u16=None) -> np.ndarray:
         return np.full(6, 99.0, dtype=np.float32)
 
 

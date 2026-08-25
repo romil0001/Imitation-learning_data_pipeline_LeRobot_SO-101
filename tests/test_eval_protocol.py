@@ -42,7 +42,7 @@ class StubPolicy:
     def reset(self) -> None:
         self.resets += 1
 
-    def select_action(self, image_rgb: np.ndarray, state: np.ndarray) -> np.ndarray:
+    def select_action(self, image_rgb: np.ndarray, state: np.ndarray, depth_u16=None) -> np.ndarray:
         assert image_rgb.shape == (24, 32, 3)
         out = state.copy()
         out[1] = 42.0
@@ -88,11 +88,11 @@ def _tiny_protocol_yaml(tmp_path: Path) -> Path:
 
 def test_load_pen_to_keys_protocol() -> None:
     proto = load_protocol(PROTOCOL_PATH)
-    assert proto.task == "Pick pen and place it next to the keys"
+    assert proto.task == "Place keys into metal cup"
     assert proto.timeout_s == 60
     assert proto.n_trials_per_condition == 5
-    assert "keys" in proto.success_criterion.lower()
-    assert [c.id for c in proto.conditions] == ["pen=left", "pen=center", "pen=right"]
+    assert "metal cup" in proto.success_criterion.lower()
+    assert [c.id for c in proto.conditions] == ["keys=left", "keys=center", "keys=right"]
     assert all(c.lighting == "overhead" and c.distractors == "none" and c.split == "id" for c in proto.conditions)
     assert [c.pen for c in proto.conditions] == ["left", "center", "right"]
 

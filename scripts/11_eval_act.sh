@@ -4,7 +4,8 @@
 # Default: GDM scored protocol (y/n per trial). Unscored timed run: PROTOCOL= bash scripts/11_eval_act.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck source=scripts/_common.sh
+# shellcheck source=scripts/_comm
+# on.sh
 source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 load_ports
