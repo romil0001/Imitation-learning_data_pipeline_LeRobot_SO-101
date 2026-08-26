@@ -111,6 +111,7 @@ Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/rep
 | [`docs/architecture.md`](docs/architecture.md) | Software module map |
 | [`docs/reproduction.md`](docs/reproduction.md) | Lab setup and experiment workflow |
 | [`docs/checklist.md`](docs/checklist.md) | Power and labeling checklist |
+| [`docs/linkedin.md`](docs/linkedin.md) | LinkedIn project / Featured copy |
 
 ## Citation
 
