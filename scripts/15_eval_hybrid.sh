@@ -12,11 +12,13 @@ load_camera
 
 DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
 POLICY_BASE="${POLICY_BASE:-smolvla}"
-if [[ "$POLICY_BASE" == "act" ]]; then
+if [[ "$POLICY_BASE" == "act" || "$POLICY_BASE" == "act-jax" ]]; then
   POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/act_${DATASET_NAME}}"
-else
+elif [[ "$POLICY_BASE" == "smolvla" ]]; then
   JOB_NAME="${JOB_NAME:-smolvla_${DATASET_NAME}}"
   POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/$JOB_NAME}"
+else
+  POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/${POLICY_BASE}_${DATASET_NAME}}"
 fi
 DURATION="${DURATION:-60}"
 PROTOCOL="${PROTOCOL-$ROOT/config/eval/pen_to_keys.yaml}"

@@ -46,6 +46,12 @@ Default task string: *Place keys into metal cup*.
 
 ## Policies
 
+Setup algorithms run the cell (motor IDs, calibration, teleoperation, recording,
+replay, homing, analytic depth grasp, protocol scoring). ML algorithms are the
+learned map from cameras and joint state to a 6-D action. The lists, the shared
+`select_action` contract, and how to add a policy are in
+[`algorithms.md`](algorithms.md). `python -m so101 algorithms` prints the split.
+
 ### ACT (Action Chunking Transformer)
 
 Implementation follows Zhao et al. (2023): ResNet18 backbone, CVAE latent,

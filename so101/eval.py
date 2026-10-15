@@ -65,33 +65,6 @@ def run_eval_loop(
     return steps
 
 
-def _resolve_smolvla_checkpoint(root: Path, checkpoint: str, dataset_name: str) -> Path:
-    if checkpoint:
-        return Path(checkpoint)
-    candidates = [
-        root / "outputs" / "train" / f"smolvla_{dataset_name}",
-        root / "outputs" / "train" / f"smolvla_{dataset_name}" / "checkpoints" / "last" / "pretrained_model",
-    ]
-    for c in candidates:
-        if c.is_dir() and (
-            (c / "config.json").is_file()
-            or (c / "pretrained_model" / "config.json").is_file()
-            or any(c.glob("**/config.json"))
-        ):
-            # Prefer nested pretrained_model when present (lerobot-train layout).
-            nested = c / "pretrained_model"
-            if nested.is_dir():
-                return nested
-            ckpts = sorted(c.glob("checkpoints/*/pretrained_model"))
-            if ckpts:
-                return ckpts[-1]
-            return c
-    raise FileNotFoundError(
-        f"No SmolVLA checkpoint under outputs/train/smolvla_{dataset_name}. "
-        "Convert + train first: bash scripts/13_convert_lerobot.sh && bash scripts/14_train_smolvla.sh"
-    )
-
-
 def _load_eval_policy(
     *,
     policy_kind: str,
@@ -106,43 +79,21 @@ def _load_eval_policy(
     image_width: int,
     grasp_config: str,
 ) -> Any:
-    from so101.grasp_config import load_grasp_config
-    from so101.hybrid_policy import HybridGraspPolicy
-    from so101.models.act import ACTPolicy, find_policy_weights
-    from so101.models.smolvla_wrap import SmolVLAPolicyWrap
+    from so101.algorithms import LoadContext, load_policy
 
-    kind = policy_kind.strip().lower()
-    base_kind = policy_base.strip().lower()
-
-    def load_act() -> Any:
-        ckpt = Path(checkpoint) if checkpoint else root / "outputs" / "train" / f"act_{dataset_name}"
-        find_policy_weights(ckpt)
-        return ACTPolicy.load(ckpt, device=device)
-
-    def load_smolvla() -> Any:
-        ckpt = _resolve_smolvla_checkpoint(root, checkpoint, dataset_name)
-        return SmolVLAPolicyWrap.load(
-            ckpt,
-            device=device,
-            task=task,
-            camera_names=camera_names,
-            image_height=image_height,
-            image_width=image_width,
-        )
-
-    if kind == "act":
-        return load_act()
-    if kind == "smolvla":
-        return load_smolvla()
-    if kind == "hybrid":
-        if base_kind == "act":
-            base = load_act()
-        elif base_kind == "smolvla":
-            base = load_smolvla()
-        else:
-            raise ValueError(f"Unknown --policy-base {policy_base!r} (use act or smolvla)")
-        return HybridGraspPolicy(base, grasp_cfg=load_grasp_config(grasp_config or None))
-    raise ValueError(f"Unknown --policy {policy_kind!r} (use act, smolvla, or hybrid)")
+    ctx = LoadContext(
+        checkpoint=checkpoint,
+        dataset_name=dataset_name,
+        root=root,
+        device=device,
+        task=task,
+        camera_names=tuple(camera_names),
+        image_height=image_height,
+        image_width=image_width,
+        grasp_config=grasp_config,
+        policy_base=policy_base,
+    )
+    return load_policy(policy_kind, ctx)
 
 
 def eval_from_env(

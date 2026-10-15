@@ -38,8 +38,9 @@ def test_inspect_prints_episode_count(tmp_path: Path, capsys) -> None:
 
 def test_train_parser_gdm_flags() -> None:
     args = build_parser().parse_args(
-        ["train", "--val-frac", "0.2", "--seed", "0", "--eval-every", "1000"]
+        ["train", "--algo", "act-jax", "--val-frac", "0.2", "--seed", "0", "--eval-every", "1000"]
     )
+    assert args.algo == "act-jax"
     assert args.val_frac == 0.2
     assert args.seed == 0
     assert args.eval_every == 1000
@@ -63,6 +64,22 @@ def test_eval_parser_hybrid_flags() -> None:
     assert args.policy_base == "act"
     assert args.grasp_config.endswith("hybrid_grasp.yaml")
     assert "keys" in args.task
+
+
+def test_eval_parser_accepts_new_policy_name() -> None:
+    args = build_parser().parse_args(["eval", "--policy", "my_policy", "--policy-base", "my_policy"])
+    assert args.policy == "my_policy"
+    assert args.policy_base == "my_policy"
+
+
+def test_algorithms_command_prints_both_families(capsys) -> None:
+    assert main(["algorithms"]) == 0
+    out = capsys.readouterr().out
+    assert "SETUP" in out
+    assert "ML" in out
+    assert "depth-grasp" in out
+    assert "act-jax" in out
+    assert "my_policy" not in out
 
 
 def test_convert_parser() -> None:
