@@ -1,4 +1,4 @@
-"""python -m so101 {record,train,eval,replay,inspect,convert}"""
+"""python -m so101 {record,train,eval,replay,inspect,convert,algorithms}"""
 
 from __future__ import annotations
 
@@ -53,18 +53,28 @@ def cmd_replay(args: argparse.Namespace) -> int:
 
 
 def cmd_train(args: argparse.Namespace) -> int:
-    from so101.train import train_from_env
+    from so101.algorithms import TrainContext, train_algorithm
 
-    train_from_env(
-        dataset_name=args.dataset,
-        steps=args.steps,
-        batch_size=args.batch_size,
-        output_dir=args.output_dir,
-        val_frac=args.val_frac,
-        seed=args.seed,
-        eval_every=args.eval_every,
-        backend=args.backend,
+    train_algorithm(
+        TrainContext(
+            algo=args.algo,
+            dataset_name=args.dataset,
+            steps=args.steps,
+            batch_size=args.batch_size,
+            output_dir=args.output_dir,
+            val_frac=args.val_frac,
+            seed=args.seed,
+            eval_every=args.eval_every,
+            backend=args.backend,
+        )
     )
+    return 0
+
+
+def cmd_algorithms(args: argparse.Namespace) -> int:
+    from so101.algorithms import format_catalog
+
+    print(format_catalog(args.family), end="")
     return 0
 
 
@@ -106,7 +116,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="so101",
-        description="SO-101 visuomotor manipulation — record, ACT/SmolVLA train, hybrid eval, replay",
+        description="SO-101 visuomotor manipulation — cell setup, learned policies, eval, replay",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -117,7 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
     rec.add_argument("-y", "--yes", action="store_true", help="Skip hardware confirm prompt")
     rec.set_defaults(func=cmd_record)
 
-    tr = sub.add_parser("train", help="Train ACT on a local dataset (Mac)")
+    tr = sub.add_parser("train", help="Train a registered ML algorithm (default: act)")
+    tr.add_argument(
+        "--algo",
+        default="act",
+        help="ML algorithm name (python -m so101 algorithms --family ml). act-jax forces the Flax trainer.",
+    )
     tr.add_argument("--dataset", default="so101_d405_demo")
     tr.add_argument("--steps", type=int, default=40_000)
     tr.add_argument("--batch-size", type=int, default=0, help="0 = auto (2 on mps/cpu, 8 on cuda)")
@@ -133,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tr.set_defaults(func=cmd_train)
 
-    ev = sub.add_parser("eval", help="Run ACT / SmolVLA / hybrid (SmolVLA+depth grasp)")
+    ev = sub.add_parser("eval", help="Run a registered ML policy, or hybrid (ML + depth grasp)")
     ev.add_argument("--dataset", default="so101_d405_demo")
     ev.add_argument("--checkpoint", default="")
     ev.add_argument("--duration", type=float, default=60.0, help="Unscored timed run if --protocol is omitted")
@@ -145,15 +160,13 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--n-trials", type=int, default=None, help="Override protocol n_trials_per_condition")
     ev.add_argument(
         "--policy",
-        choices=("act", "smolvla", "hybrid"),
         default="act",
-        help="act | smolvla | hybrid (base policy + depth grasp)",
+        help="ML algorithm, or hybrid. Names: python -m so101 algorithms",
     )
     ev.add_argument(
         "--policy-base",
-        choices=("act", "smolvla"),
         default="smolvla",
-        help="For --policy hybrid: which base policy to wrap",
+        help="For --policy hybrid: which ML algorithm to wrap",
     )
     ev.add_argument(
         "--grasp-config",
@@ -182,6 +195,15 @@ def build_parser() -> argparse.ArgumentParser:
     insp.add_argument("--dataset", default="so101_d405_demo")
     insp.add_argument("--dataset-dir", default="")
     insp.set_defaults(func=cmd_inspect)
+
+    alg = sub.add_parser("algorithms", help="List setup algorithms and ML algorithms")
+    alg.add_argument(
+        "--family",
+        choices=("setup", "ml"),
+        default=None,
+        help="Show one side of the split",
+    )
+    alg.set_defaults(func=cmd_algorithms)
 
     return p
 

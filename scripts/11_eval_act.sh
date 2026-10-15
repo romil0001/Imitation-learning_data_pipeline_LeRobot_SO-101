@@ -13,31 +13,34 @@ require_follower_port_exists
 load_camera
 
 DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+POLICY="${POLICY:-act}"
 JOB_NAME="${JOB_NAME:-act_${DATASET_NAME}}"
 POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/$JOB_NAME}"
 DURATION="${DURATION:-60}"
 PROTOCOL="${PROTOCOL-$ROOT/config/eval/pen_to_keys.yaml}"
 N_TRIALS="${N_TRIALS:-}"
 
-if [[ -f "$POLICY_PATH/best_val/model.pt" ]]; then
-  echo "Checkpoint: $POLICY_PATH/best_val/model.pt"
-elif [[ -f "$POLICY_PATH/last/model.pt" ]]; then
-  echo "Checkpoint: $POLICY_PATH/last/model.pt (no best_val)"
-elif [[ -f "$POLICY_PATH/model.pt" ]]; then
-  echo "Checkpoint: $POLICY_PATH/model.pt (legacy)"
-else
-  echo "No ACT checkpoint at $POLICY_PATH (expected best_val/model.pt or last/model.pt)" >&2
-  echo "Train first: bash scripts/10_train_act.sh" >&2
-  exit 1
+if [[ "$POLICY" == "act" || "$POLICY" == "act-jax" ]]; then
+  if [[ -f "$POLICY_PATH/best_val/model.pt" || -f "$POLICY_PATH/best_val/model.msgpack" ]]; then
+    echo "Checkpoint: $POLICY_PATH/best_val"
+  elif [[ -f "$POLICY_PATH/last/model.pt" || -f "$POLICY_PATH/last/model.msgpack" ]]; then
+    echo "Checkpoint: $POLICY_PATH/last (no best_val)"
+  elif [[ -f "$POLICY_PATH/model.pt" || -f "$POLICY_PATH/model.msgpack" ]]; then
+    echo "Checkpoint: $POLICY_PATH (legacy)"
+  else
+    echo "No ACT checkpoint at $POLICY_PATH (expected best_val/model.pt or last/model.pt)" >&2
+    echo "Train first: bash scripts/10_train_act.sh" >&2
+    exit 1
+  fi
 fi
 
 echo "============================================================"
-echo " ACT EVAL — FOLLOWER + D405 (Omen publisher)"
+echo " $POLICY EVAL — FOLLOWER + D405 (Omen publisher)"
 echo " - Power ON:  FOLLOWER bus + 12V + USB"
 echo " - Leader can be OFF"
 echo " - Omen: omen\\run_publish.bat must be streaming"
 echo "============================================================"
-echo "Policy:   $POLICY_PATH"
+echo "Policy:   $POLICY  ($POLICY_PATH)"
 echo "Follower: $FOLLOWER_PORT ($FOLLOWER_ID)"
 echo "Camera:   ${CAMERA_NAMES:-$CAMERA_NAME} backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-}"
 if [[ -n "$PROTOCOL" ]]; then
@@ -57,6 +60,7 @@ EVAL_ARGS=(
   "$(conda_lerobot_python)" -m so101 eval
   --dataset="$DATASET_NAME"
   --checkpoint="$POLICY_PATH"
+  --policy="$POLICY"
   --yes
 )
 if [[ -n "$PROTOCOL" ]]; then

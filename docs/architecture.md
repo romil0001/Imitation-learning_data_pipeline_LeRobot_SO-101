@@ -44,9 +44,10 @@ Ports live in gitignored `config/ports.env`. Camera/ZMQ live in gitignored `conf
 
 | Command | Role |
 |---------|------|
+| `algorithms` | List setup routines and ML policies (`--family setup` or `ml`) |
 | `record` | Leader → follower teleop; **n** save, **r** redo, **q** quit |
-| `train` | ACT (torch/MPS default; optional JAX/Flax `tiny` backbone) |
-| `eval` | ACT, SmolVLA, or hybrid + scored protocol |
+| `train` | Train a registered ML policy (default ACT; `--algo act-jax` for Flax) |
+| `eval` | Any registered ML policy, or hybrid + scored protocol |
 | `convert` | Local dataset → LeRobot export for SmolVLA |
 | `replay` | Play one episode's `action.npy` on the follower |
 | `inspect` | Print `meta.json` / episode inventory |
@@ -60,6 +61,7 @@ LeRobot is imported only from `so101.hardware` (and SmolVLA wrap). Dataset I/O, 
 ```text
 so101/
   cli.py            argparse entry
+  algorithms/       setup vs ML registry; plugins/ for a new policy
   config.py         ports.env + camera.env
   hardware.py       SO-101 follower/leader + ZMQ cameras
   record.py         teleop loop
@@ -105,13 +107,18 @@ grasp controller.
 
 ## Policies
 
+Setup routines (motors, record, replay, home, depth grasp, protocol) and learned
+policies are separate registries. `python -m so101 algorithms` prints both.
+A new model is a plugin under `so101/algorithms/plugins/`; eval, record, and
+the depth-grasp override stay unchanged. See [`algorithms.md`](algorithms.md).
+
 1. **ACT** — ResNet18 (or tiny) + CVAE transformer, chunk size 100, L1 + KL.
    Train holds out episodes (`val_frac=0.2`). Checkpoints under
    `outputs/train/act_<dataset>/` (`last/`, `best_val/`). Train loss is not
    the score.
 2. **SmolVLA** — convert demos (`scripts/13_convert_lerobot.sh`), fine-tune
    (`14`), eval with language task string matching record.
-3. **Hybrid** — ACT or SmolVLA for pick-and-place; `DepthGraspController`
+3. **Hybrid** — any registered ML policy for pick-and-place; `DepthGraspController`
    overrides vertical joints near contact using wrist depth
    (`config/hybrid_grasp.yaml`), then hands control back for lift/place.
 

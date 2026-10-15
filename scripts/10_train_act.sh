@@ -7,6 +7,7 @@ source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 
 DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+ALGO="${ALGO:-act}"
 JOB_NAME="${JOB_NAME:-act_${DATASET_NAME}}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/train/$JOB_NAME}"
 STEPS="${STEPS:-40000}"
@@ -29,6 +30,7 @@ fi
 echo "============================================================"
 echo " ACT TRAINING (Mac) — not the Omen"
 echo " Dataset:  $(dataset_local_root)"
+echo " Algo:     $ALGO"
 echo " Device:   $DEVICE  batch=$BATCH_SIZE  steps=$STEPS"
 echo " Split:    val_frac=$VAL_FRAC  seed=$SEED  eval_every=$EVAL_EVERY"
 echo " Output:   $OUTPUT_DIR"
@@ -39,6 +41,7 @@ confirm_continue
 
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 run_logged train_act "$(conda_lerobot_python)" -m so101 train \
+  --algo="$ALGO" \
   --dataset="$DATASET_NAME" \
   --steps="$STEPS" \
   --batch-size="$BATCH_SIZE" \

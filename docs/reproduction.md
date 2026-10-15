@@ -77,9 +77,10 @@ bash scripts/15_eval_hybrid.sh
 Direct CLI equivalents:
 
 ```bash
+python -m so101 algorithms          # setup routines vs learned policies
 python -m so101 record --dataset so101_d405_demo --num-episodes 50
-python -m so101 train --dataset so101_d405_demo --val-frac 0.2 --seed 0
-python -m so101 eval --protocol config/eval/pen_to_keys.yaml --n-trials 5
+python -m so101 train --algo act --dataset so101_d405_demo --val-frac 0.2 --seed 0
+python -m so101 eval --policy act --protocol config/eval/pen_to_keys.yaml --n-trials 5
 python -m so101 eval --policy hybrid --policy-base act --grasp-config config/hybrid_grasp.yaml --protocol config/eval/pen_to_keys.yaml -y
 ```
 

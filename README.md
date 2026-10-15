@@ -106,6 +106,7 @@ Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/rep
 
 | Document | Contents |
 |----------|----------|
+| [`docs/algorithms.md`](docs/algorithms.md) | Setup vs ML algorithms, and how to add a policy |
 | [`docs/methods.md`](docs/methods.md) | Apparatus, data schema, policies, eval protocol |
 | [`docs/outcomes.md`](docs/outcomes.md) | Outcome graphs and reported metrics |
 | [`docs/architecture.md`](docs/architecture.md) | Software module map |
