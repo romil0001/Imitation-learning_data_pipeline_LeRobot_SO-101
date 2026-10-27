@@ -46,6 +46,7 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 
 ## Session
 1. Mac: `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (operator site; **D** = status check)
+   - Optional, off the home Wi-Fi: [`remote_camera.md`](remote_camera.md) (`bash scripts/16_remote_cam.sh`). The Omen publisher stays as it is.
 2. Mac: `bash scripts/06_teleoperate.sh`
 3. Mac: `bash scripts/08_record.sh` (~50 episodes for ACT; same cameras/task; data in `data/datasets/`)
 4. Mac: `bash scripts/10_train_act.sh` (MPS, hours — not the Omen; holds out episodes, writes `best_val`; depth used automatically if recorded; optional `--backend jax`)

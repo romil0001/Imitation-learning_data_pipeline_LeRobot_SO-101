@@ -80,6 +80,7 @@ so101/
   dataset/          local episode folders
 omen/publish_d405.py
 dashboard/          FastAPI operator site (cameras, status, logs)
+so101/remote_cam/   off-LAN MJPEG relay + digital camera control (Omen unchanged)
 ```
 
 ## Data
@@ -132,10 +133,22 @@ success (**y**/**n**), small condition grid. Logs:
 
 Live MJPEG (overhead, wrist, wrist depth), Omen/arm status, joint bars while
 recording, `outputs/session.log`. The dashboard does not start record or train.
+It stays on `127.0.0.1`.
+
+## Remote camera
+
+`python -m so101 remote-cam` serves the same Omen ZMQ frames to a browser that
+is not on the home Wi-Fi. The Mac subscribes (it does not replace
+`omen/publish_d405.py`) and either serves HTTP itself or pushes JPEGs out to
+a relay. Viewers switch wrist / overhead / depth, and pan, zoom, rotate,
+pause, and set quality and frame rate. Those controls crop and re-encode the
+picture; they do not move the cameras or change RealSense settings.
+
+Details: [`remote_camera.md`](remote_camera.md).
 
 ## Boundaries
 
 - No Hugging Face Hub uploads from this repo
 - No agent orchestration or worker-plan docs
 - Dashboard does not own the robot; terminals running `python -m so101` do
-- Omen publisher is capture-only
+- Omen publisher is capture-only. The remote camera relay only subscribes to it

@@ -78,6 +78,12 @@ def cmd_algorithms(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_remote_cam(args: argparse.Namespace) -> int:
+    from so101.remote_cam.cli import dispatch
+
+    return dispatch(args)
+
+
 def cmd_eval(args: argparse.Namespace) -> int:
     from so101.eval import eval_from_env
 
@@ -204,6 +210,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show one side of the split",
     )
     alg.set_defaults(func=cmd_algorithms)
+
+    remote = sub.add_parser(
+        "remote-cam",
+        help="Stream and control wrist/overhead cameras from outside the home network",
+    )
+    remote_sub = remote.add_subparsers(dest="remote_cmd", required=True)
+    serve = remote_sub.add_parser("serve", help="Relay viewers connect to (public host, or this Mac)")
+    serve.add_argument("--host", default="0.0.0.0")
+    serve.add_argument("--port", type=int, default=8090)
+    serve.add_argument("--token", default="", help="Shared secret. Defaults to CAMERA_RELAY_TOKEN")
+    serve.add_argument("--zmq-host", default="", help="Omen LAN IP. With this set, serve subscribes itself")
+    serve.add_argument("--zmq-port", type=int, default=0, help="0 = ZMQ_PORT from camera.env, else 5555")
+    serve.add_argument(
+        "--local",
+        action="store_true",
+        help="Subscribe using ZMQ_HOST from config/camera.env (Mac on the same LAN as the Omen)",
+    )
+    serve.add_argument("--tls-cert", default="")
+    serve.add_argument("--tls-key", default="")
+    serve.set_defaults(func=cmd_remote_cam)
+
+    publish = remote_sub.add_parser(
+        "publish",
+        help="On the Mac: subscribe to the Omen and push frames to a relay",
+    )
+    publish.add_argument("--relay", required=True, help="Relay base URL, e.g. https://cam.example.com")
+    publish.add_argument("--token", default="", help="Shared secret. Defaults to CAMERA_RELAY_TOKEN")
+    publish.add_argument("--zmq-host", default="", help="Omen LAN IP. Default: ZMQ_HOST in config/camera.env")
+    publish.add_argument("--zmq-port", type=int, default=0)
+    publish.set_defaults(func=cmd_remote_cam)
 
     return p
 

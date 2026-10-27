@@ -85,3 +85,14 @@ python -m so101 eval --policy hybrid --policy-base act --grasp-config config/hyb
 ```
 
 Eval artifacts: `outputs/eval/<checkpoint>/<run_id>/summary.json`.
+
+## Cameras off the home network
+
+Optional. Do not change the Omen publisher. Leave `omen\run_publish.bat` running and, on the Mac:
+
+```bash
+export CAMERA_RELAY_TOKEN="<long random token>"
+bash scripts/16_remote_cam.sh serve --host 0.0.0.0 --port 8090 --local
+```
+
+Open the printed URL from a phone (Tailscale, or a relay on a public host). Login, then switch views and pan/zoom. Full steps: [`remote_camera.md`](remote_camera.md).

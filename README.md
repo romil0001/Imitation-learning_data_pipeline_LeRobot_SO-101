@@ -74,6 +74,15 @@ flowchart TB
   PUB -->|ZMQ RGB + depth| SO101
 ```
 
+## Cameras from outside the lab
+
+The Omen publisher stays on the home LAN. A relay on the Mac (or a small public
+machine the Mac dials out to) serves the wrist, overhead, and depth views to a
+browser on any network, with pan, zoom, rotation, quality, and frame-rate
+controls. The dashboard on port 8080 is unchanged.
+
+**→ [`docs/remote_camera.md`](docs/remote_camera.md)**
+
 ## Outcome graphs
 
 Full outcome flow, policy comparison, and eval protocol diagrams:
@@ -112,6 +121,7 @@ Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/rep
 | [`docs/architecture.md`](docs/architecture.md) | Software module map |
 | [`docs/reproduction.md`](docs/reproduction.md) | Lab setup and experiment workflow |
 | [`docs/checklist.md`](docs/checklist.md) | Power and labeling checklist |
+| [`docs/remote_camera.md`](docs/remote_camera.md) | Watch and control cameras off the home Wi-Fi |
 
 ## Citation
 
