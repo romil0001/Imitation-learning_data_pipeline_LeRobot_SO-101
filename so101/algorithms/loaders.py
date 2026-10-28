@@ -17,25 +17,35 @@ def load_act(ctx: LoadContext) -> Any:
 
 
 def _resolve_smolvla_checkpoint(root: Path, checkpoint: str, dataset_name: str) -> Path:
+    candidates: list[Path] = []
     if checkpoint:
-        return Path(checkpoint)
-    candidates = [
-        root / "outputs" / "train" / f"smolvla_{dataset_name}",
-        root / "outputs" / "train" / f"smolvla_{dataset_name}" / "checkpoints" / "last" / "pretrained_model",
-    ]
+        candidates.append(Path(checkpoint))
+    candidates.extend(
+        [
+            root / "outputs" / "train" / f"smolvla_{dataset_name}",
+            root
+            / "outputs"
+            / "train"
+            / f"smolvla_{dataset_name}"
+            / "checkpoints"
+            / "last"
+            / "pretrained_model",
+        ]
+    )
     for candidate in candidates:
-        if candidate.is_dir() and (
-            (candidate / "config.json").is_file()
-            or (candidate / "pretrained_model" / "config.json").is_file()
-            or any(candidate.glob("**/config.json"))
-        ):
-            nested = candidate / "pretrained_model"
-            if nested.is_dir():
-                return nested
-            ckpts = sorted(candidate.glob("checkpoints/*/pretrained_model"))
-            if ckpts:
-                return ckpts[-1]
+        if not candidate.is_dir():
+            continue
+        if (candidate / "config.json").is_file():
             return candidate
+        nested = candidate / "pretrained_model"
+        if (nested / "config.json").is_file():
+            return nested
+        last = candidate / "checkpoints" / "last" / "pretrained_model"
+        if (last / "config.json").is_file():
+            return last
+        ckpts = sorted(candidate.glob("checkpoints/*/pretrained_model"))
+        if ckpts and (ckpts[-1] / "config.json").is_file():
+            return ckpts[-1]
     raise FileNotFoundError(
         f"No SmolVLA checkpoint under outputs/train/smolvla_{dataset_name}. "
         "Convert + train first: bash scripts/13_convert_lerobot.sh && bash scripts/14_train_smolvla.sh"
