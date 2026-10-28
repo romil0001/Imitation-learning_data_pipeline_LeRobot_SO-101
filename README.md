@@ -109,6 +109,8 @@ Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/rep
 | [`docs/algorithms.md`](docs/algorithms.md) | Setup vs ML algorithms, and how to add a policy |
 | [`docs/methods.md`](docs/methods.md) | Apparatus, data schema, policies, eval protocol |
 | [`docs/outcomes.md`](docs/outcomes.md) | Outcome graphs and reported metrics |
+| [`docs/literature_review.md`](docs/literature_review.md) | Related work and the ML research gap this platform targets |
+| [`research/`](research/README.md) | PhD-style ML research programme: proposal, pre-registration, LaTeX paper |
 | [`docs/architecture.md`](docs/architecture.md) | Software module map |
 | [`docs/reproduction.md`](docs/reproduction.md) | Lab setup and experiment workflow |
 | [`docs/checklist.md`](docs/checklist.md) | Power and labeling checklist |
