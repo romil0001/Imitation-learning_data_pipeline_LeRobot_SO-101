@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,3 +32,23 @@ def test_depth_camera_names_prefers_wrist_and_base(monkeypatch) -> None:
     assert dash.depth_camera_names(["wrist", "overhead", "base"]) == ["wrist", "base"]
     monkeypatch.setitem(dash.CFG, "use_depth", False)
     assert dash.depth_camera_names(["wrist", "base"]) == []
+
+
+def test_fresh_stream_ids_drops_stale_cached_frames(monkeypatch) -> None:
+    """Once Omen drops, tiles must stop reporting live from leftover JPEGs."""
+    now = time.time()
+    monkeypatch.setattr(
+        dash,
+        "_frame_ts",
+        {"wrist": now, "overhead": now - 10.0, "base": now - 0.2},
+    )
+    assert dash.fresh_stream_ids(max_age_s=2.0) == ["base", "wrist"]
+
+
+def test_frame_is_fresh_false_when_missing_or_stale(monkeypatch) -> None:
+    now = time.time()
+    monkeypatch.setattr(dash, "_frame_ts", {"wrist": now - 5.0})
+    assert dash.frame_is_fresh("wrist", max_age_s=2.0) is False
+    assert dash.frame_is_fresh("missing", max_age_s=2.0) is False
+    monkeypatch.setattr(dash, "_frame_ts", {"wrist": now})
+    assert dash.frame_is_fresh("wrist", max_age_s=2.0) is True

@@ -52,8 +52,11 @@ CFG: dict[str, str] = {
 
 _latest_jpeg = b""
 _latest_jpegs: dict[str, bytes] = {}
+_frame_ts: dict[str, float] = {}
 _jpeg_lock = threading.Lock()
 _stop = threading.Event()
+# Tiles / MJPEG treat a stream as live only while frames stay this fresh.
+STALE_S = 2.0
 _stats = {
     "last_ts": 0.0,
     "fps": 0.0,
@@ -163,6 +166,18 @@ def note_frame() -> None:
     _stats["n"] += 1
 
 
+def frame_is_fresh(stream_id: str, max_age_s: float = STALE_S, now: float | None = None) -> bool:
+    ts = _frame_ts.get(stream_id)
+    if ts is None or ts <= 0:
+        return False
+    return ((now if now is not None else time.time()) - ts) <= max_age_s
+
+
+def fresh_stream_ids(max_age_s: float = STALE_S, now: float | None = None) -> list[str]:
+    t = now if now is not None else time.time()
+    return sorted(sid for sid, ts in _frame_ts.items() if ts > 0 and (t - ts) <= max_age_s)
+
+
 def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
     global _latest_jpeg
     from so101.zmq_rgbd import decode_depth_png_b64, depth_colormap_bgr
@@ -205,13 +220,16 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
             continue
         preferred = decoded.get(camera_name) or next(iter(decoded.values()))
         depth_ids = [k for k in decoded if k.endswith("_depth")]
+        now = time.time()
         with _jpeg_lock:
             _latest_jpegs.update(decoded)
             _latest_jpeg = preferred
-            _stats["stream_ids"] = sorted(_latest_jpegs)
-            _stats["depth_ids"] = sorted({*(_stats.get("depth_ids") or []), *depth_ids})
-            if depth_ids:
-                _stats["depth_ok"] = True
+            for sid in decoded:
+                _frame_ts[sid] = now
+            live = fresh_stream_ids(now=now)
+            _stats["stream_ids"] = live
+            _stats["depth_ids"] = [k for k in live if k.endswith("_depth")]
+            _stats["depth_ok"] = any(k.endswith("_depth") for k in live)
             note_frame()
     sock.close(0)
 
@@ -230,9 +248,13 @@ def jpeg_loop_opencv(index: int, width: int, height: int, fps: int) -> None:
             continue
         ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
         if ok:
+            name = CFG["camera_name"]
+            now = time.time()
             with _jpeg_lock:
                 _latest_jpeg = buf.tobytes()
-                _latest_jpegs[CFG["camera_name"]] = _latest_jpeg
+                _latest_jpegs[name] = _latest_jpeg
+                _frame_ts[name] = now
+                _stats["stream_ids"] = fresh_stream_ids(now=now)
                 note_frame()
         time.sleep(delay)
     cap.release()
@@ -371,8 +393,11 @@ def api_status():
     host, port = CFG["zmq_host"], int(CFG.get("zmq_port") or "5555")
     ts, label = last_banner()
     with _jpeg_lock:
-        live_ids = list(_stats.get("stream_ids") or sorted(_latest_jpegs))
-        depth_live = list(_stats.get("depth_ids") or [])
+        live_ids = fresh_stream_ids()
+        depth_live = [k for k in live_ids if k.endswith("_depth")]
+        _stats["stream_ids"] = live_ids
+        _stats["depth_ids"] = depth_live
+        _stats["depth_ok"] = bool(depth_live)
     names = camera_names_from_cfg()
     streams = stream_catalog(live_ids)
     return {
@@ -450,9 +475,10 @@ def mjpeg_iter(camera_name: str | None = None):
     while True:
         with _jpeg_lock:
             if camera_name:
-                frame = _latest_jpegs.get(camera_name, b"")
+                frame = _latest_jpegs.get(camera_name, b"") if frame_is_fresh(camera_name) else b""
             else:
-                frame = _latest_jpeg
+                # Preferred cam: only serve while any stream is still fresh.
+                frame = _latest_jpeg if fresh_stream_ids() else b""
         if not frame:
             label = camera_name or "camera"
             blank = np.zeros((270, 480, 3), dtype=np.uint8)
