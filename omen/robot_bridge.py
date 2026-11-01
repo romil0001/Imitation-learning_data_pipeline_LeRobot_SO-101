@@ -92,7 +92,9 @@ def main() -> int:
         print("Install lerobot[feetech] in this env and check the COM port.", file=sys.stderr)
         return 1
 
-    follower.connect()
+    # Skip interactive LeRobot calibrate() prompt on the Omen bridge.
+    # Run a full calibrate once on this machine if joint zeros look wrong.
+    follower.connect(calibrate=False)
     ctx = zmq.Context.instance()
     pub = ctx.socket(zmq.PUB)
     pub.bind(f"tcp://{args.bind}:{args.state_port}")
