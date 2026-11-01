@@ -61,6 +61,8 @@ def test_catalog_splits_setup_and_ml() -> None:
     assert set(setup).isdisjoint(ml)
     for name in (
         "find-port",
+        "omen-publish",
+        "link-check",
         "record",
         "replay",
         "home",

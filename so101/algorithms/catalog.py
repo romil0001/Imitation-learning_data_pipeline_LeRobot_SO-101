@@ -54,8 +54,15 @@ def builtin_algorithms() -> list[Algorithm]:
             name="omen-publish",
             family="setup",
             summary="Stream wrist RGB, wrist depth, and overhead JPEG from the Windows sensing PC.",
-            run="python omen/publish_d405.py",
+            run="python omen/publish_d405.py  (setup: omen\\\\setup_omen.bat; check: --self-check)",
             module="omen/publish_d405.py",
+        ),
+        Algorithm(
+            name="link-check",
+            family="setup",
+            summary="From the Mac, prove wrist RGB, overhead RGB, and wrist depth are arriving over ZMQ.",
+            run="python -m so101 link-check   # or bash scripts/16_test_link.sh",
+            module="so101.link_check",
         ),
         Algorithm(
             name="teleoperate",

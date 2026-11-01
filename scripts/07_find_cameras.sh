@@ -43,8 +43,10 @@ echo "Wrote $OUT using opencv index $INDEX (on this Mac, D405 RGB is index 0)."
 echo "If preview is the laptop webcam, try CAMERA_INDEX=0 or 1 in camera.env."
 echo
 echo "Preferred for real D405 (RGB + optional depth dump): plug the camera into the HP Omen,"
-echo "run omen/setup_omen.bat then omen/run_publish.bat, copy config/camera.env.example,"
-echo "and set CAMERA_BACKEND=zmq plus ZMQ_HOST=<Omen LAN IP>."
+echo "run omen/setup_omen.bat (then omen/open_firewall.bat once as Admin),"
+echo "omen/run_publish.bat, copy config/camera.env.example,"
+echo "and set CAMERA_BACKEND=zmq plus ZMQ_HOST=<Omen LAN IP from omen/show_lan_ip.bat>."
+echo "See omen/README.md."
 echo
 echo "To retry true RealSense depth on this Mac (often needs sudo, still flaky):"
 echo "  sudo conda run -n lerobot lerobot-find-cameras realsense"

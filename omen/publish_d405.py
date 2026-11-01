@@ -6,6 +6,7 @@ LeRobot on the Mac subscribes with type=zmq. Message shape:
 
 Usage (Anaconda Prompt on the Omen):
   conda activate omen-d405
+  python omen/publish_d405.py --self-check
   python omen/publish_d405.py --list-webcams
   python omen/publish_d405.py --webcam-index 2
 """
@@ -15,6 +16,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import socket
 import sys
 import time
 from pathlib import Path
@@ -43,6 +45,11 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--no-overhead", action="store_true", help="Publish D405 only")
     p.add_argument("--list-webcams", action="store_true", help="Print OpenCV camera indices and exit")
+    p.add_argument(
+        "--self-check",
+        action="store_true",
+        help="Verify RealSense, webcams, and ZMQ bind; print LAN hints; exit",
+    )
     p.add_argument("--serial", default="", help="D405 serial; empty = first device")
     p.add_argument("--no-depth", action="store_true", help="RGB only (saves RAM)")
     p.add_argument(
@@ -52,6 +59,106 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--dump-every", type=int, default=1, help="Save every Nth frame to dump-dir")
     return p.parse_args()
+
+
+def list_realsense_devices() -> list[tuple[str, str]]:
+    """Return (name, serial) for every connected RealSense device."""
+    ctx = rs.context()
+    out: list[tuple[str, str]] = []
+    for dev in ctx.query_devices():
+        name = dev.get_info(rs.camera_info.name)
+        serial = dev.get_info(rs.camera_info.serial_number)
+        out.append((name, serial))
+    return out
+
+
+def lan_ipv4_hints() -> list[str]:
+    """Best-effort non-loopback IPv4 addresses for Mac ZMQ_HOST."""
+    found: list[str] = []
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127.") and ip not in found:
+                found.append(ip)
+    except OSError:
+        pass
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        ip = sock.getsockname()[0]
+        sock.close()
+        if not ip.startswith("127.") and ip not in found:
+            found.insert(0, ip)
+    except OSError:
+        pass
+    return found
+
+
+def probe_zmq_bind(bind: str, port: int) -> None:
+    ctx = zmq.Context.instance()
+    sock = ctx.socket(zmq.PUB)
+    try:
+        sock.bind(f"tcp://{bind}:{port}")
+    finally:
+        sock.close(0)
+
+
+def run_self_check(bind: str, port: int) -> int:
+    """Hardware/software smoke test for first-time Omen setup. Returns process exit code."""
+    errors: list[str] = []
+    print("=== Omen self-check ===", flush=True)
+
+    devices = list_realsense_devices()
+    if not devices:
+        errors.append(
+            "No RealSense device. Plug D405 into USB 3, install Intel RealSense SDK drivers, "
+            "close RealSense Viewer, retry."
+        )
+        print("RealSense: NONE", flush=True)
+    else:
+        print("RealSense:", flush=True)
+        for name, serial in devices:
+            print(f"  {name}  serial={serial}", flush=True)
+
+    cams = list_webcams()
+    if not cams:
+        print("OpenCV webcams: NONE (overhead USB may be unplugged)", flush=True)
+        errors.append("No OpenCV webcams. Plug the overhead USB cam and retry --list-webcams.")
+    else:
+        print("OpenCV webcams:", flush=True)
+        for idx, w, h in cams:
+            hint = _webcam_hint(w, h)
+            extra = f"  — {hint}" if hint else ""
+            print(f"  {idx}: {w}x{h}{extra}", flush=True)
+        try:
+            auto = resolve_webcam_index(-1)
+            print(f"Auto overhead pick: index {auto}", flush=True)
+        except RuntimeError as e:
+            errors.append(str(e))
+
+    try:
+        probe_zmq_bind(bind, port)
+        print(f"ZMQ bind tcp://{bind}:{port}: ok", flush=True)
+    except zmq.ZMQError as e:
+        errors.append(f"ZMQ bind failed on port {port}: {e} (is publish_d405 already running?)")
+        print(f"ZMQ bind tcp://{bind}:{port}: FAIL ({e})", flush=True)
+
+    ips = lan_ipv4_hints()
+    if ips:
+        print("LAN IPv4 candidates for Mac config/camera.env ZMQ_HOST:", flush=True)
+        for ip in ips:
+            print(f"  {ip}", flush=True)
+    else:
+        print("LAN IPv4: could not detect — run omen\\show_lan_ip.bat or ipconfig", flush=True)
+
+    if errors:
+        print("\nSELF-CHECK FAILED:", flush=True)
+        for msg in errors:
+            print(f"  - {msg}", flush=True)
+        return 1
+    print("\nSELF-CHECK OK — next: omen\\run_publish.bat (leave it running)", flush=True)
+    return 0
 
 
 def opencv_backend() -> int:
@@ -128,6 +235,8 @@ def jpeg_b64(bgr: np.ndarray, quality: int) -> str:
 
 def main() -> int:
     args = parse_args()
+    if args.self_check:
+        return run_self_check(args.bind, args.port)
     if args.list_webcams:
         found = list_webcams()
         if not found:

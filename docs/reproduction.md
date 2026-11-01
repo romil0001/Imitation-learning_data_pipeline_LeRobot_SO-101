@@ -54,17 +54,22 @@ Full power table: [`checklist.md`](checklist.md).
 
 ## Omen setup (Windows)
 
+Full walkthrough: [`omen/README.md`](../omen/README.md).
+
 1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-2. D405 on USB 3 (wrist); USB webcam (overhead)
-3. `omen\setup_omen.bat`
-4. `python omen\publish_d405.py --list-webcams` — pick USB cam index (not laptop cam)
-5. `omen\run_publish.bat` (XWF-1080P often `--webcam-index 2`)
-6. Allow **TCP 5555 inbound** in Windows Firewall
+2. Install [Intel RealSense SDK](https://github.com/IntelRealSense/librealsense/releases) USB drivers
+3. D405 on USB 3 (wrist); USB webcam (overhead)
+4. `omen\setup_omen.bat` — env + import verify + `--self-check`
+5. Admin once: `omen\open_firewall.bat` (inbound TCP **5555**)
+6. `python omen\publish_d405.py --list-webcams` — pick USB cam index (not laptop cam)
+7. `omen\run_publish.bat` (XWF-1080P often `--webcam-index 2`)
+8. `omen\show_lan_ip.bat` → set that IPv4 as Mac `ZMQ_HOST`
 
 ## Experiment workflow
 
 ```bash
 conda activate lerobot
+bash scripts/16_test_link.sh          # PASS = Omen RGB+depth reaching the Mac
 bash scripts/09_dashboard.sh          # optional monitoring
 bash scripts/08_record.sh             # ~50 demos
 bash scripts/10_train_act.sh          # ACT
