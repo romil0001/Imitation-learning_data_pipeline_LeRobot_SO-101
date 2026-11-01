@@ -230,6 +230,13 @@ def main() -> int:
     base_serial = (args.base_serial or "").strip()
     with_depth = not args.no_depth
 
+    if not base_serial:
+        print(
+            "WARNING: no --base-serial — publishing a single D405 as "
+            f"{args.camera_name!r}. Dashboard base tile will stay offline. "
+            "Set BASE_SERIAL in omen\\camera_serials.bat and restart.",
+            flush=True,
+        )
     streams: list[D405Stream] = []
     try:
         streams.append(
@@ -248,6 +255,10 @@ def main() -> int:
                     "Warning: --base-serial set without --wrist-serial; "
                     "pin both serials so wrist/base do not swap after replug.",
                     flush=True,
+                )
+            if wrist_serial and base_serial == wrist_serial:
+                raise RuntimeError(
+                    f"--wrist-serial and --base-serial are the same ({wrist_serial})"
                 )
             base_depth = with_depth and not args.base_no_depth
             streams.append(

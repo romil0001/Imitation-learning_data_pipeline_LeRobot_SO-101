@@ -402,7 +402,11 @@ def api_status():
         "streams": streams,
         "arms": arm_status(),
         "v1": True,
-        "hint": "Dashboard streams every RGB/depth view from camera.env; joints while record/eval",
+        "hint": (
+            "Dashboard streams every RGB/depth view from camera.env; joints while record/eval. "
+            "Offline tiles mean that key is missing from the Omen ZMQ packet "
+            "(restart omen\\run_publish.bat with WRIST_SERIAL + BASE_SERIAL set)."
+        ),
     }
 
 
@@ -460,7 +464,24 @@ def mjpeg_iter(camera_name: str | None = None):
         if not frame:
             label = camera_name or "camera"
             blank = np.zeros((270, 480, 3), dtype=np.uint8)
-            cv2.putText(blank, f"waiting for {label}", (40, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 180), 1)
+            cv2.putText(
+                blank,
+                f"offline: {label}",
+                (40, 120),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (180, 180, 180),
+                1,
+            )
+            cv2.putText(
+                blank,
+                "not in Omen ZMQ packet",
+                (40, 160),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (140, 140, 140),
+                1,
+            )
             ok, buf = cv2.imencode(".jpg", blank)
             frame = buf.tobytes() if ok else b""
         yield boundary + b"\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"

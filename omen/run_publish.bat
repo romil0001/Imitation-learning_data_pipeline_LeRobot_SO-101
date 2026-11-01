@@ -13,10 +13,18 @@ set "BASE_DEPTH_FLAG="
 if /I "%BASE_NO_DEPTH%"=="1" set "BASE_DEPTH_FLAG=--base-no-depth"
 if /I "%BASE_NO_DEPTH%"=="true" set "BASE_DEPTH_FLAG=--base-no-depth"
 if "%WRIST_SERIAL%"=="" (
-  echo WARNING: WRIST_SERIAL unset — using first RealSense. Create omen\camera_serials.bat
-  python omen\publish_d405.py --camera-name wrist --overhead-name overhead --webcam-index %WEBCAM_INDEX% %*
-) else (
-  if defined BASE_DEPTH_FLAG (set "BASE_DEPTH_MSG=off") else (set "BASE_DEPTH_MSG=on")
-  echo Using wrist=%WRIST_SERIAL% base=%BASE_SERIAL% webcam=%WEBCAM_INDEX% base_depth=%BASE_DEPTH_MSG%
-  python omen\publish_d405.py --wrist-serial %WRIST_SERIAL% --base-serial %BASE_SERIAL% --webcam-index %WEBCAM_INDEX% %BASE_DEPTH_FLAG% %*
+  echo ERROR: WRIST_SERIAL unset. Edit omen\camera_serials.bat ^(python omen\publish_d405.py --list-realsense^).
+  exit /b 1
 )
+if "%BASE_SERIAL%"=="" (
+  echo ERROR: BASE_SERIAL unset. Dashboard needs a base stream. Edit omen\camera_serials.bat.
+  echo If wrist/base views are swapped, swap the two serial values and restart.
+  exit /b 1
+)
+if /I "%WRIST_SERIAL%"=="%BASE_SERIAL%" (
+  echo ERROR: WRIST_SERIAL and BASE_SERIAL are the same ^(%WRIST_SERIAL%^). They must differ.
+  exit /b 1
+)
+if defined BASE_DEPTH_FLAG (set "BASE_DEPTH_MSG=off") else (set "BASE_DEPTH_MSG=on")
+echo Using wrist=%WRIST_SERIAL% base=%BASE_SERIAL% webcam=%WEBCAM_INDEX% base_depth=%BASE_DEPTH_MSG%
+python omen\publish_d405.py --wrist-serial %WRIST_SERIAL% --base-serial %BASE_SERIAL% --webcam-index %WEBCAM_INDEX% %BASE_DEPTH_FLAG% %*

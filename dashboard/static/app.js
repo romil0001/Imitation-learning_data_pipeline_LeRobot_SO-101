@@ -82,7 +82,7 @@ function renderStreams(streams) {
       slot.classList.toggle("live", !!s.live);
       slot.classList.toggle("waiting", !s.live);
       const badge = slot.querySelector(".live-badge");
-      if (badge) badge.textContent = s.live ? "live" : "waiting";
+      if (badge) badge.textContent = s.live ? "live" : "offline";
     });
     return;
   }
@@ -95,7 +95,7 @@ function renderStreams(streams) {
     slot.innerHTML = `
       <div class="panel-h">
         <h1>${s.label || s.id}</h1>
-        <span class="live-badge muted">${s.live ? "live" : "waiting"}</span>
+        <span class="live-badge muted">${s.live ? "live" : "offline"}</span>
       </div>
       <div class="stage">
         <img src="${s.url}?t=${Date.now()}" alt="${s.label || s.id}"/>
