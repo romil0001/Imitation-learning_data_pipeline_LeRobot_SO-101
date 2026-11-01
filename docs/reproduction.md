@@ -69,6 +69,7 @@ Full walkthrough: [`omen/README.md`](../omen/README.md).
 
 ```bash
 conda activate lerobot
+bash scripts/16_test_link.sh          # PASS = Omen RGB+depth reaching the Mac
 bash scripts/09_dashboard.sh          # optional monitoring
 bash scripts/08_record.sh             # ~50 demos
 bash scripts/10_train_act.sh          # ACT

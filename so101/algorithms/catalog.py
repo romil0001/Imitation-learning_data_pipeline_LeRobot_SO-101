@@ -58,6 +58,13 @@ def builtin_algorithms() -> list[Algorithm]:
             module="omen/publish_d405.py",
         ),
         Algorithm(
+            name="link-check",
+            family="setup",
+            summary="From the Mac, prove wrist RGB, overhead RGB, and wrist depth are arriving over ZMQ.",
+            run="python -m so101 link-check   # or bash scripts/16_test_link.sh",
+            module="so101.link_check",
+        ),
+        Algorithm(
             name="teleoperate",
             family="setup",
             summary="Leader drives the follower live, with no dataset logging.",

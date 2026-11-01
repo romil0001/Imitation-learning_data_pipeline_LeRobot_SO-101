@@ -45,9 +45,11 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 4. D405 plugged into USB 3 (wrist); USB webcam plugged in (overhead)
 5. `python omen\publish_d405.py --list-webcams` then `omen\run_publish.bat` (leave it running)
 6. Copy an IPv4 from `omen\show_lan_ip.bat` into Mac `config/camera.env` as `ZMQ_HOST`  
+7. Mac: `bash scripts/16_test_link.sh` must print **PASS**  
    Details: [`omen/README.md`](../omen/README.md)
 
 ## Session
+0. Mac: `bash scripts/16_test_link.sh` → must print **PASS** (wrist + overhead + depth over ZMQ)
 1. Mac: `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (operator site; **D** = status check)
 2. Mac: `bash scripts/06_teleoperate.sh`
 3. Mac: `bash scripts/08_record.sh` (~50 episodes for ACT; same cameras/task; data in `data/datasets/`)

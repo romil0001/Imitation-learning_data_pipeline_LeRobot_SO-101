@@ -101,7 +101,8 @@ bash scripts/11_eval_act.sh   # → outputs/eval/.../summary.json
 ```
 
 Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/reproduction.md).  
-HP Omen (Windows sensing node): [`omen/README.md`](omen/README.md).
+HP Omen (Windows sensing node): [`omen/README.md`](omen/README.md).  
+Verify the stream: `bash scripts/16_test_link.sh` (PASS = wrist + overhead + depth).
 
 ## Documentation
 

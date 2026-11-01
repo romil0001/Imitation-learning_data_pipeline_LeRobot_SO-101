@@ -29,6 +29,7 @@ Leader USB + follower USB ───►
 
 Train ACT on the Mac (MPS). Never train on the 4 GB Omen.
 Omen first-time setup: [`omen/README.md`](../omen/README.md) (`setup_omen.bat`, `open_firewall.bat`, `--self-check`).
+Prove transmission on the Mac: `python -m so101 link-check` / `bash scripts/16_test_link.sh`.
 
 ## Hardware identity
 

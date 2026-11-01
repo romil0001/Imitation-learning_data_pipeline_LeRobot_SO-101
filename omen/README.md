@@ -63,11 +63,23 @@ conda run -n omen-d405 --no-capture-output python omen\publish_d405.py --self-ch
 
 Confirms RealSense devices, OpenCV webcams, and that port 5555 can bind.
 
-## Mac side (reminder)
+## Mac side — prove data is transmitting
+
+With `omen\\run_publish.bat` still running on the Omen:
 
 ```bash
 cp config/camera.env.example config/camera.env
 # set ZMQ_HOST=<Omen IPv4 from show_lan_ip.bat>
+bash scripts/16_test_link.sh
+# or:  python -m so101 link-check
+```
+
+PASS means wrist RGB, overhead RGB, and wrist depth (if `CAMERA_USE_DEPTH=true`)
+are arriving over ZMQ. Sample frames land in `outputs/link_check/<timestamp>/`.
+
+Visual check:
+
+```bash
 bash scripts/09_dashboard.sh   # http://127.0.0.1:8080 — wrist / overhead / depth
 ```
 

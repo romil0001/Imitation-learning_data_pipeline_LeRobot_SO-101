@@ -1,4 +1,4 @@
-"""python -m so101 {record,train,eval,replay,inspect,convert,algorithms}"""
+"""python -m so101 {record,train,eval,replay,inspect,convert,algorithms,link-check}"""
 
 from __future__ import annotations
 
@@ -113,6 +113,43 @@ def cmd_convert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_link_check(args: argparse.Namespace) -> int:
+    from so101.link_check import format_report, link_check_from_env, probe_zmq_stream
+
+    dump_dir = Path(args.dump_dir) if args.dump_dir else None
+    if args.host:
+        report = probe_zmq_stream(
+            args.host,
+            args.port,
+            seconds=args.seconds,
+            expected_images=[n.strip() for n in args.expect.split(",") if n.strip()],
+            expect_depth=not args.no_depth,
+            depth_name=args.depth_name,
+            dump_dir=dump_dir,
+            min_frames=args.min_frames,
+        )
+    else:
+        report = link_check_from_env(
+            seconds=args.seconds,
+            dump=not args.no_dump and dump_dir is None,
+            min_frames=args.min_frames,
+        )
+        if dump_dir is not None and report.tcp_ok:
+            # User asked for a specific dump path; re-sample once into it.
+            report = probe_zmq_stream(
+                report.host,
+                report.port,
+                seconds=args.seconds,
+                expected_images=report.expected_images,
+                expect_depth=report.expect_depth,
+                depth_name=report.depth_name,
+                dump_dir=dump_dir,
+                min_frames=args.min_frames,
+            )
+    print(format_report(report), end="")
+    return 0 if report.ok else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="so101",
@@ -204,6 +241,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show one side of the split",
     )
     alg.set_defaults(func=cmd_algorithms)
+
+    link = sub.add_parser(
+        "link-check",
+        help="Verify Omen→Mac ZMQ: wrist RGB, overhead RGB, wrist depth transmitting",
+    )
+    link.add_argument("--seconds", type=float, default=3.0, help="How long to sample the stream")
+    link.add_argument("--host", default="", help="Override ZMQ_HOST (default: config/camera.env)")
+    link.add_argument("--port", type=int, default=5555, help="ZMQ port when using --host")
+    link.add_argument(
+        "--expect",
+        default="wrist,overhead",
+        help="Comma-separated RGB keys required when using --host",
+    )
+    link.add_argument("--depth-name", default="wrist", help="Depth key required unless --no-depth")
+    link.add_argument("--no-depth", action="store_true", help="Do not require depth frames")
+    link.add_argument("--min-frames", type=int, default=3, help="Minimum frames for PASS")
+    link.add_argument("--no-dump", action="store_true", help="Do not write sample frames")
+    link.add_argument(
+        "--dump-dir",
+        default="",
+        help="With --host: directory for sample JPEGs/PNGs (default: no dump unless set)",
+    )
+    link.set_defaults(func=cmd_link_check)
 
     return p
 
