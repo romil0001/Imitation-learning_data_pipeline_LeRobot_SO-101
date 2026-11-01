@@ -54,7 +54,7 @@ def builtin_algorithms() -> list[Algorithm]:
             name="omen-publish",
             family="setup",
             summary="Stream wrist RGB, wrist depth, and overhead JPEG from the Windows sensing PC.",
-            run="python omen/publish_d405.py",
+            run="python omen/publish_d405.py  (setup: omen\\\\setup_omen.bat; check: --self-check)",
             module="omen/publish_d405.py",
         ),
         Algorithm(

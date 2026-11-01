@@ -39,10 +39,13 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 7. Copy `config/camera.env.example` → `config/camera.env`, set `ZMQ_HOST`
 
 ## Omen software order
-1. Miniconda installed
-2. `omen\setup_omen.bat`
-3. D405 plugged into USB 3 (wrist); USB webcam plugged in (overhead)
-4. `python omen\publish_d405.py --list-webcams` then `omen\run_publish.bat` (leave it running)
+1. Miniconda + [Intel RealSense SDK](https://github.com/IntelRealSense/librealsense/releases) drivers installed
+2. `omen\setup_omen.bat` (creates `omen-d405`, verifies imports, runs `--self-check`)
+3. Admin once: `omen\open_firewall.bat` (inbound TCP 5555)
+4. D405 plugged into USB 3 (wrist); USB webcam plugged in (overhead)
+5. `python omen\publish_d405.py --list-webcams` then `omen\run_publish.bat` (leave it running)
+6. Copy an IPv4 from `omen\show_lan_ip.bat` into Mac `config/camera.env` as `ZMQ_HOST`  
+   Details: [`omen/README.md`](../omen/README.md)
 
 ## Session
 1. Mac: `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080 (operator site; **D** = status check)

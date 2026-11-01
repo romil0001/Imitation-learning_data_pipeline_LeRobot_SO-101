@@ -28,6 +28,7 @@ Leader USB + follower USB ───►
 | **HP Omen (Windows)** | Wrist D405 + overhead USB webcam, ZMQ publisher | PyTorch, training, arm USB |
 
 Train ACT on the Mac (MPS). Never train on the 4 GB Omen.
+Omen first-time setup: [`omen/README.md`](../omen/README.md) (`setup_omen.bat`, `open_firewall.bat`, `--self-check`).
 
 ## Hardware identity
 
