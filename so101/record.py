@@ -173,14 +173,7 @@ def record_from_env(
         print(f"Already have {dataset.meta.episode_count} episodes (target {num_episodes})")
         return 0
 
-    if ports.follower_is_remote:
-        print(
-            "REMOTE FOLLOWER: leader USB on Mac; follower USB+12V on Omen "
-            f"({ports.robot_host}:{ports.robot_state_port}/{ports.robot_cmd_port})."
-        )
-        print("Omen must run publish_d405.py AND robot_bridge.py.")
-    else:
-        print("BOTH ARMS: follower + leader USB and 12V ON. Omen publisher must be running.")
+    print("BOTH ARMS: follower + leader USB and 12V ON. Omen publisher must be running.")
     print(f"Dataset {root}  this_run={remaining}  target={num_episodes}  task={task!r}")
     print(f"Cameras: {', '.join(names)}  {cam0.width}x{cam0.height}@{cam0.fps}")
     if use_depth:

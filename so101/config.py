@@ -39,15 +39,6 @@ class PortsConfig:
     follower_i: int = 0
     follower_d: int = 48
     follower_bus_retries: int = 8
-    # local = USB on Mac; remote = follower USB on Omen via omen/robot_bridge.py
-    follower_backend: str = "local"
-    robot_host: str = ""
-    robot_state_port: int = 5556
-    robot_cmd_port: int = 5557
-
-    @property
-    def follower_is_remote(self) -> bool:
-        return self.follower_backend.strip().lower() in {"remote", "zmq", "network"}
 
 
 @dataclass(frozen=True)
@@ -67,35 +58,14 @@ class CameraSettings:
 def load_ports(path: Path | None = None) -> PortsConfig:
     path = path or Path(project_root() / "config" / "ports.env")
     env = load_env_file(path)
-    backend = (env.get("FOLLOWER_BACKEND", "local") or "local").strip().lower()
-    remote = backend in {"remote", "zmq", "network"}
     follower = env.get("FOLLOWER_PORT", "")
     leader = env.get("LEADER_PORT", "")
-    robot_host = (env.get("ROBOT_HOST", "") or "").strip()
-    if not leader:
-        raise ValueError(f"LEADER_PORT must be set in {path}")
-    if leader.startswith("CHANGE_ME"):
+    if not follower or not leader:
+        raise ValueError(f"FOLLOWER_PORT and LEADER_PORT must be set in {path}")
+    if follower.startswith("CHANGE_ME") or leader.startswith("CHANGE_ME"):
         raise ValueError(f"Replace CHANGE_ME placeholders in {path}")
-    if remote:
-        if not robot_host or robot_host.startswith("CHANGE_ME"):
-            try:
-                cam_env = load_env_file(project_root() / "config" / "camera.env")
-                robot_host = (cam_env.get("ZMQ_HOST", "") or "").strip()
-            except FileNotFoundError:
-                robot_host = ""
-        if not robot_host or robot_host.startswith("CHANGE_ME"):
-            raise ValueError(
-                f"Remote follower needs ROBOT_HOST in {path} (or ZMQ_HOST in camera.env)"
-            )
-        if not follower:
-            follower = "remote"
-    else:
-        if not follower:
-            raise ValueError(f"FOLLOWER_PORT must be set in {path}")
-        if follower.startswith("CHANGE_ME"):
-            raise ValueError(f"Replace CHANGE_ME placeholders in {path}")
-        if follower == leader:
-            raise ValueError(f"FOLLOWER_PORT and LEADER_PORT must be different (got {follower})")
+    if follower == leader:
+        raise ValueError(f"FOLLOWER_PORT and LEADER_PORT must be different (got {follower})")
     return PortsConfig(
         follower_port=follower,
         leader_port=leader,
@@ -105,10 +75,6 @@ def load_ports(path: Path | None = None) -> PortsConfig:
         follower_i=int(env.get("FOLLOWER_I", "0")),
         follower_d=int(env.get("FOLLOWER_D", "48")),
         follower_bus_retries=int(env.get("FOLLOWER_BUS_RETRIES", "8")),
-        follower_backend=backend,
-        robot_host=robot_host,
-        robot_state_port=int(env.get("ROBOT_STATE_PORT", "5556")),
-        robot_cmd_port=int(env.get("ROBOT_CMD_PORT", "5557")),
     )
 
 

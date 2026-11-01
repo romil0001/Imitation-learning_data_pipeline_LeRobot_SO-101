@@ -336,34 +336,12 @@ def arm_status() -> dict:
     ports = load_env_file(ROOT / "config" / "ports.env")
     follower = ports.get("FOLLOWER_PORT", "")
     leader = ports.get("LEADER_PORT", "")
-    backend = (ports.get("FOLLOWER_BACKEND", "local") or "local").strip().lower()
-    remote = backend in {"remote", "zmq", "network"}
-    robot_host = (ports.get("ROBOT_HOST", "") or "").strip()
-    if remote and (not robot_host or robot_host.startswith("CHANGE_ME")):
-        robot_host = (CFG.get("zmq_host") or "").strip()
-    state_port = int(ports.get("ROBOT_STATE_PORT", "5556") or "5556")
-    cmd_port = int(ports.get("ROBOT_CMD_PORT", "5557") or "5557")
-    if remote:
-        follower_ok = bool(robot_host) and not robot_host.startswith("CHANGE_ME") and tcp_ok(
-            robot_host, state_port
-        )
-        bridge_ok = follower_ok
-    else:
-        follower_ok = (
-            bool(follower) and not follower.startswith("CHANGE_ME") and Path(follower).exists()
-        )
-        bridge_ok = False
     return {
-        "follower_port": follower if not remote else f"remote://{robot_host}:{state_port}",
+        "follower_port": follower,
         "leader_port": leader,
         "follower_id": ports.get("FOLLOWER_ID", ""),
         "leader_id": ports.get("LEADER_ID", ""),
-        "follower_backend": "remote" if remote else "local",
-        "robot_host": robot_host,
-        "robot_state_port": state_port,
-        "robot_cmd_port": cmd_port,
-        "bridge_ok": bridge_ok,
-        "follower_ok": follower_ok,
+        "follower_ok": bool(follower) and not follower.startswith("CHANGE_ME") and Path(follower).exists(),
         "leader_ok": bool(leader) and not leader.startswith("CHANGE_ME") and Path(leader).exists(),
     }
 

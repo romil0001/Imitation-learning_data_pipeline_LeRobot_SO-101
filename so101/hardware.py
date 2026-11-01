@@ -99,23 +99,6 @@ def make_follower(
     *,
     with_cameras: bool = True,
 ) -> Any:
-    if ports.follower_is_remote:
-        from so101.remote_follower import RemoteFollower
-
-        cams: list[CameraSettings] = []
-        if with_cameras and camera is not None:
-            cams = [camera] if isinstance(camera, CameraSettings) else list(camera)
-        cam0 = cams[0] if cams else None
-        return RemoteFollower(
-            ports.robot_host,
-            state_port=ports.robot_state_port,
-            cmd_port=ports.robot_cmd_port,
-            camera_host=(cam0.zmq_host if cam0 else ports.robot_host),
-            camera_port=(cam0.zmq_port if cam0 else 5555),
-            camera_names=[c.name for c in cams],
-            with_cameras=with_cameras and bool(cams),
-        )
-
     from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 
     cameras = make_lerobot_cameras(camera) if with_cameras and camera is not None else {}

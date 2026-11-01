@@ -1,7 +1,6 @@
 const stateEl = document.getElementById("state");
 const timerEl = document.getElementById("timer");
 const omenEl = document.getElementById("omen-pill");
-const bridgeEl = document.getElementById("bridge-pill");
 const hwEl = document.getElementById("hw");
 const logEl = document.getElementById("log");
 const camsEl = document.getElementById("cams");
@@ -162,15 +161,6 @@ async function refresh() {
   omenEl.className = `pill ${cam.reachable ? "ok" : "bad"}`;
 
   const arms = s.arms || {};
-  const remote = (arms.follower_backend || "local") === "remote";
-  if (remote) {
-    bridgeEl.hidden = false;
-    bridgeEl.textContent = arms.bridge_ok ? "BRIDGE UP" : "BRIDGE DOWN";
-    bridgeEl.className = `pill ${arms.bridge_ok ? "ok" : "bad"}`;
-  } else {
-    bridgeEl.hidden = true;
-  }
-
   const age = cam.last_frame_age_s == null ? "—" : `${cam.last_frame_age_s}s`;
   const depthNames = (cam.depth_names || []).join(", ") || "—";
   const depthLive = (cam.depth_live || []).map((id) => id.replace(/_depth$/, "")).join(", ");
@@ -180,19 +170,6 @@ async function refresh() {
     row("Frame age", age, cam.last_frame_age_s != null && cam.last_frame_age_s < 2),
     row("FPS", cam.fps ?? "—", cam.fps > 1),
     row("Depth", cam.depth_ok ? (depthLive || depthNames) : "no depth yet", cam.depth_ok),
-  ];
-  if (remote) {
-    rows.push(
-      row(
-        "Bridge",
-        arms.bridge_ok
-          ? `${arms.robot_host}:${arms.robot_state_port}/${arms.robot_cmd_port}`
-          : (arms.follower_port || "down"),
-        !!arms.bridge_ok,
-      ),
-    );
-  }
-  rows.push(
     row(
       "Follower",
       arms.follower_ok ? arms.follower_port : (arms.follower_port || "missing"),
@@ -204,7 +181,7 @@ async function refresh() {
       !!arms.leader_ok,
     ),
     row("Last session", s.last_banner || "—"),
-  );
+  ];
   hwEl.replaceChildren(...rows);
 }
 
