@@ -1,0 +1,11 @@
+# LaTeX intermediates. The compiled PDF is committed so the proposal can be read
+# without a TeX install.
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
