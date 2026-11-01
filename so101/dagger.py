@@ -239,7 +239,7 @@ def dagger_from_env(
     from so101.eval import _dataset_home_qpos, _load_eval_policy
     from so101.hardware import make_follower, make_leader
     from so101.home import interpolate_to_qpos, safe_power_down
-    from so101.keys import StdinKeys
+    from so101.keys import OperatorKeys
     from so101.train import detect_device
 
     root = project_root()
@@ -295,7 +295,7 @@ def dagger_from_env(
         rest_pose = home
         print(f"Moving follower to demo start pose {list(home)}", flush=True)
         interpolate_to_qpos(follower, home, n_steps=80, dt=0.04, sleep=time.sleep)
-        with StdinKeys(allowed={"p", "c", "n", "r", "q", " "}) as stdin_keys:
+        with OperatorKeys(allowed={"p", "c", "n", "r", "q", " "}) as op_keys:
             saved = run_dagger_loop(
                 dataset=dataset,
                 follower=follower,
@@ -303,7 +303,7 @@ def dagger_from_env(
                 policy=policy_obj,
                 camera_names=names,
                 fps=cam0.fps,
-                keys=stdin_keys,
+                keys=op_keys,
                 num_episodes=num_episodes,
                 depth_source=depth_source,
                 depth_camera_name=depth_name,

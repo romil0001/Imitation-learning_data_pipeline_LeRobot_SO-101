@@ -209,6 +209,16 @@ kbd {
   font: 700 12px ui-monospace, Menlo, monospace;
   color: var(--amber);
 }
+kbd[data-key] {
+  cursor: pointer;
+  user-select: none;
+}
+kbd[data-key]:hover,
+kbd[data-key]:focus-visible {
+  border-color: var(--amber);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--amber);
+}
 
 #log {
   margin: 0;

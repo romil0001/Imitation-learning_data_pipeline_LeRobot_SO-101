@@ -45,13 +45,28 @@
         <div id="joints" class="joint-list"></div>
       </section>
       <section class="panel">
-        <div class="panel-h"><h1>Keys</h1><span class="muted">dashboard viz</span></div>
-        <ul class="keys">
-          <li><kbd>D</kbd> refresh hardware status</li>
-          <li><kbd>A</kbd> start episode — run <code>scripts/08_record.sh</code></li>
-          <li><kbd>n</kbd> / <kbd>r</kbd> / <kbd>q</kbd> in the record terminal</li>
+        <div class="panel-h"><h1>Keys</h1><span class="muted">click or press</span></div>
+        <ul class="keys" id="key-help">
+          <li><kbd data-key="d" tabindex="0">D</kbd> refresh hardware status</li>
+          <li><kbd data-key="a" tabindex="0">A</kbd> start episode — run <code>scripts/08_record.sh</code></li>
+          <li>
+            <kbd data-key="n" tabindex="0">n</kbd> /
+            <kbd data-key="r" tabindex="0">r</kbd> /
+            <kbd data-key="q" tabindex="0">q</kbd>
+            save / redo / quit (record)
+          </li>
+          <li>
+            <kbd data-key="y" tabindex="0">y</kbd> /
+            <kbd data-key="n" tabindex="0">n</kbd>
+            score trial (eval)
+          </li>
+          <li>
+            <kbd data-key="p" tabindex="0">p</kbd> /
+            <kbd data-key="c" tabindex="0">c</kbd>
+            pause / correct (dagger)
+          </li>
         </ul>
-        <p class="muted small">Every RGB + depth view from <code>camera.env</code> streams here. Joints update during record/eval. Keep the Omen camera publisher and <code>09_dashboard.sh</code> running. Follower USB stays on the Mac.</p>
+        <p class="muted small">With record/eval/dagger running, keys work here (keyboard or click) — no need to focus the terminal. Every RGB + depth view from <code>camera.env</code> streams here. Keep the Omen publisher and <code>09_dashboard.sh</code> running.</p>
       </section>
     </aside>
 

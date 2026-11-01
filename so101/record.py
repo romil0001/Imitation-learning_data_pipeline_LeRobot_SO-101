@@ -122,7 +122,7 @@ def record_from_env(
     from so101.config import load_cameras, load_ports, project_root
     from so101.dataset import DatasetMeta, compute_stats, write_stats
     from so101.hardware import make_follower, make_leader
-    from so101.keys import StdinKeys
+    from so101.keys import OperatorKeys
 
     ports = load_ports()
     cameras = load_cameras()
@@ -179,6 +179,7 @@ def record_from_env(
     if use_depth:
         print(f"Depth: {depth_names} uint16 from ZMQ (Omen publisher must not use --no-depth)")
     print("Live preview: dashboard http://127.0.0.1:8080  (cameras, depth, joint graphs)", flush=True)
+    print("Keys n/r/q work in this terminal or on the dashboard Keys panel.", flush=True)
     if confirm:
         input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
 
@@ -196,7 +197,7 @@ def record_from_env(
             depth_source.wait_for_depth(dname, timeout_s=20.0)
         print("Depth stream OK", flush=True)
     try:
-        with StdinKeys() as keys:
+        with OperatorKeys() as keys:
             saved = run_record_loop(
                 dataset=dataset,
                 follower=follower,

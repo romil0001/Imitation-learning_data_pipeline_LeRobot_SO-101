@@ -209,19 +209,73 @@ function bindLogs() {
   };
 }
 
-document.addEventListener("keydown", (e) => {
-  const tag = (e.target && e.target.tagName) || "";
-  if (tag === "INPUT" || tag === "TEXTAREA") return;
-  const k = e.key.toLowerCase();
+const OP_KEYS = new Set(["n", "r", "q", "y", "p", "c", "s", "f", " "]);
+
+async function sendOpKey(raw) {
+  const key = raw === " " || raw === "Space" || raw === "space" ? " " : String(raw).toLowerCase();
+  if (!OP_KEYS.has(key)) return;
+  try {
+    const r = await fetch("/api/key", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      toast(j.detail || `Key ${key} rejected`);
+      return;
+    }
+    const label = key === " " ? "space" : key;
+    if (j.listening) {
+      toast(`Sent ${label}`);
+    } else {
+      toast(`Queued ${label} — start record/eval/dagger`);
+    }
+  } catch {
+    toast("Could not send key");
+  }
+}
+
+function handleDashboardKey(raw) {
+  const k = raw === " " ? " " : String(raw).toLowerCase();
   if (k === "d") {
-    e.preventDefault();
     Promise.all([refresh(), refreshJoints()])
       .then(() => toast("Status refreshed (D)"))
       .catch(() => toast("Status check failed"));
-  } else if (k === "a") {
-    e.preventDefault();
-    toast("Start recording in a terminal — bash scripts/08_record.sh");
+    return;
   }
+  if (k === "a") {
+    toast("Start recording in a terminal — bash scripts/08_record.sh");
+    return;
+  }
+  if (OP_KEYS.has(k)) {
+    sendOpKey(k);
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  const tag = (e.target && e.target.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const raw = e.key === " " ? " " : e.key;
+  const k = raw === " " ? " " : raw.toLowerCase();
+  if (k === "d" || k === "a" || OP_KEYS.has(k)) {
+    e.preventDefault();
+    handleDashboardKey(raw);
+  }
+});
+
+document.querySelectorAll("kbd[data-key]").forEach((el) => {
+  el.addEventListener("click", () => {
+    handleDashboardKey(el.getAttribute("data-key") || "");
+  });
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      e.stopPropagation();
+      handleDashboardKey(el.getAttribute("data-key") || "");
+    }
+  });
 });
 
 bindLogs();

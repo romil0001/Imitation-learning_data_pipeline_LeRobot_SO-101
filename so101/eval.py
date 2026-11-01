@@ -149,7 +149,7 @@ def eval_from_env(
     from so101.config import load_cameras, load_ports, project_root
     from so101.hardware import make_follower
     from so101.home import interpolate_to_qpos, safe_power_down
-    from so101.keys import StdinKeys
+    from so101.keys import OperatorKeys
     from so101.train import detect_device
 
     root = project_root()
@@ -252,8 +252,8 @@ def eval_from_env(
             if keys is not None:
                 summary = run_protocol(keys=keys, **kw)
             else:
-                with StdinKeys(allowed={"y", "n", "s", "f"}) as stdin_keys:
-                    summary = run_protocol(keys=stdin_keys, **kw)
+                with OperatorKeys(allowed={"y", "n", "s", "f"}) as op_keys:
+                    summary = run_protocol(keys=op_keys, **kw)
             return int(summary["n_success"])
         print(f"Home qpos={list(home)}")
         interpolate_to_qpos(follower, home, n_steps=80, dt=0.04, sleep=time.sleep)

@@ -21,9 +21,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 
 def _zmq():
@@ -418,6 +419,39 @@ def api_joints():
     if data is None:
         return {"fresh": False, "names": [], "state": [], "action": [], "age_s": None}
     return data
+
+
+class KeyBody(BaseModel):
+    key: str = Field(..., min_length=1, max_length=8)
+
+
+@app.post("/api/key")
+def api_key(body: KeyBody):
+    """Forward an operator key to the running record/eval/dagger process."""
+    from so101.keys import DASHBOARD_KEYS, push_live_key
+
+    raw = body.key
+    ch = " " if raw in {" ", "Space", "space"} else raw.lower()
+    if ch not in DASHBOARD_KEYS:
+        raise HTTPException(status_code=400, detail=f"unsupported key {body.key!r}")
+    try:
+        pushed = push_live_key(ch)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    state = session_state()
+    listening = (
+        process_running("so101 record")
+        or process_running("so101 dagger")
+        or process_running("so101 eval")
+        or process_running("lerobot-record")
+    )
+    return {
+        "ok": True,
+        "key": pushed,
+        "state": state,
+        "listening": listening,
+        "hint": None if listening else "No record/eval/dagger process is listening yet",
+    }
 
 
 @app.get("/api/log")
