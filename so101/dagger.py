@@ -139,8 +139,15 @@ def run_dagger_loop(
                 depth_u16 = depth_source.latest_depth(depth_camera_name)
                 if depth_u16 is None:
                     raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
-            action = policy.select_action(image, qpos_from_obs(obs), depth_u16=depth_u16)
+            qpos = qpos_from_obs(obs)
+            action = policy.select_action(image, qpos, depth_u16=depth_u16)
             follower.send_action(action_dict_from_qpos(np.asarray(action, dtype=np.float32)))
+            try:
+                from so101.live_viz import publish_live_joints
+
+                publish_live_joints(qpos, action)
+            except Exception:
+                pass
         elif phase == "handoff":
             if hold_q is None:
                 raise RuntimeError("handoff without a held pose")
@@ -160,13 +167,21 @@ def run_dagger_loop(
                     depth_u16 = depth_source.wait_for_depth(depth_camera_name, timeout_s=2.0)
                 if depth_u16 is None:
                     raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
+            state = qpos_from_obs(obs)
+            act = qpos_from_obs(sent if sent is not None else action)
             writer.add_frame(
-                state=qpos_from_obs(obs),
-                action=qpos_from_obs(sent if sent is not None else action),
+                state=state,
+                action=act,
                 timestamp=time.time(),
                 images={name: rgb_from_obs(obs, name) for name in names},
                 depth_u16=depth_u16,
             )
+            try:
+                from so101.live_viz import publish_live_joints
+
+                publish_live_joints(state, act)
+            except Exception:
+                pass
         _busy_wait(time.perf_counter() - t0, fps, sleep)
 
     return saved

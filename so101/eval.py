@@ -56,8 +56,15 @@ def run_eval_loop(
             depth_u16 = depth_source.latest_depth(depth_camera_name)
             if depth_u16 is None:
                 raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
-        action = policy.select_action(image, qpos_from_obs(obs), depth_u16=depth_u16)
+        qpos = qpos_from_obs(obs)
+        action = policy.select_action(image, qpos, depth_u16=depth_u16)
         follower.send_action(action_dict_from_qpos(action))
+        try:
+            from so101.live_viz import publish_live_joints
+
+            publish_live_joints(qpos, action)
+        except Exception:
+            pass
         steps += 1
         leftover = (1.0 / fps) - (now() - loop_t)
         if leftover > 0:

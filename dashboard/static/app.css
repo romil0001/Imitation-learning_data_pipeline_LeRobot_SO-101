@@ -70,13 +70,27 @@ body {
 }
 .cams {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
   min-width: 0;
 }
 .cam-slot { min-width: 0; }
-@media (max-width: 960px) {
-  .cams { grid-template-columns: 1fr; }
+.cam-slot.waiting .stage { outline: 1px dashed #2a313c; }
+.cam-slot .live-badge {
+  font: 700 10px/1 ui-monospace, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cam-slot.live .live-badge { color: var(--ok); }
+.cam-slot.waiting .live-badge { color: var(--muted); }
+.stage.empty-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+  aspect-ratio: 4 / 3;
+  background: #000;
 }
 .side { grid-area: side; display: flex; flex-direction: column; gap: 12px; }
 .logs { grid-area: logs; min-height: 220px; }

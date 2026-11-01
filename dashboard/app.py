@@ -21,10 +21,15 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import zmq
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+
+
+def _zmq():
+    import zmq
+
+    return zmq
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -49,7 +54,14 @@ _latest_jpeg = b""
 _latest_jpegs: dict[str, bytes] = {}
 _jpeg_lock = threading.Lock()
 _stop = threading.Event()
-_stats = {"last_ts": 0.0, "fps": 0.0, "n": 0, "depth_ok": False}
+_stats = {
+    "last_ts": 0.0,
+    "fps": 0.0,
+    "n": 0,
+    "depth_ok": False,
+    "stream_ids": [],
+    "depth_ids": [],
+}
 
 
 def load_env_file(path: Path) -> dict[str, str]:
@@ -63,6 +75,21 @@ def load_env_file(path: Path) -> dict[str, str]:
         k, v = line.split("=", 1)
         out[k.strip()] = v.strip().strip('"').strip("'")
     return out
+
+
+def camera_names_from_cfg() -> list[str]:
+    return [n.strip() for n in CFG.get("camera_names", CFG["camera_name"]).split(",") if n.strip()]
+
+
+def depth_camera_names(rgb_names: list[str] | None = None) -> list[str]:
+    """D405 views that normally carry depth (wrist/base); fall back to first cam."""
+    names = list(rgb_names or camera_names_from_cfg())
+    if not CFG.get("use_depth"):
+        return []
+    preferred = [n for n in names if n in {"wrist", "base"}]
+    if preferred:
+        return preferred
+    return [names[0]] if names else []
 
 
 def apply_camera_env() -> None:
@@ -81,7 +108,47 @@ def apply_camera_env() -> None:
     CFG["width"] = env.get("CAMERA_WIDTH", "640")
     CFG["height"] = env.get("CAMERA_HEIGHT", "480")
     CFG["fps"] = env.get("CAMERA_FPS", "15")
-    CFG["use_depth"] = env.get("CAMERA_USE_DEPTH", "false").strip().lower() in {"1", "true", "yes", "on"}
+    CFG["use_depth"] = env.get("CAMERA_USE_DEPTH", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def stream_catalog(live_ids: list[str] | None = None) -> list[dict]:
+    """RGB + depth tiles the UI should show (config order, plus any surprise live keys)."""
+    rgb_names = camera_names_from_cfg()
+    depth_names = depth_camera_names(rgb_names)
+    live = set(live_ids or [])
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    def add(stream_id: str, label: str, kind: str) -> None:
+        if stream_id in seen:
+            return
+        seen.add(stream_id)
+        out.append(
+            {
+                "id": stream_id,
+                "label": label,
+                "kind": kind,
+                "url": f"/mjpeg/{stream_id}",
+                "live": stream_id in live,
+            }
+        )
+
+    for name in rgb_names:
+        hint = "D405" if name in {"wrist", "base"} else ("USB" if name == "overhead" else "RGB")
+        add(name, f"{name} · {hint}", "rgb")
+    for name in depth_names:
+        add(f"{name}_depth", f"{name} depth · Z16", "depth")
+    for sid in sorted(live):
+        if sid.endswith("_depth"):
+            add(sid, sid.replace("_", " "), "depth")
+        else:
+            add(sid, sid, "rgb")
+    return out
 
 
 def note_frame() -> None:
@@ -100,6 +167,7 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
     global _latest_jpeg
     from so101.zmq_rgbd import decode_depth_png_b64, depth_colormap_bgr
 
+    zmq = _zmq()
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.SUB)
     sock.setsockopt_string(zmq.SUBSCRIBE, "")
@@ -136,9 +204,14 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
         if not decoded:
             continue
         preferred = decoded.get(camera_name) or next(iter(decoded.values()))
+        depth_ids = [k for k in decoded if k.endswith("_depth")]
         with _jpeg_lock:
             _latest_jpegs.update(decoded)
             _latest_jpeg = preferred
+            _stats["stream_ids"] = sorted(_latest_jpegs)
+            _stats["depth_ids"] = sorted({*(_stats.get("depth_ids") or []), *depth_ids})
+            if depth_ids:
+                _stats["depth_ok"] = True
             note_frame()
     sock.close(0)
 
@@ -241,12 +314,34 @@ def arm_status() -> dict:
     ports = load_env_file(ROOT / "config" / "ports.env")
     follower = ports.get("FOLLOWER_PORT", "")
     leader = ports.get("LEADER_PORT", "")
+    backend = (ports.get("FOLLOWER_BACKEND", "local") or "local").strip().lower()
+    remote = backend in {"remote", "zmq", "network"}
+    robot_host = (ports.get("ROBOT_HOST", "") or "").strip()
+    if remote and (not robot_host or robot_host.startswith("CHANGE_ME")):
+        robot_host = (CFG.get("zmq_host") or "").strip()
+    state_port = int(ports.get("ROBOT_STATE_PORT", "5556") or "5556")
+    cmd_port = int(ports.get("ROBOT_CMD_PORT", "5557") or "5557")
+    if remote:
+        follower_ok = bool(robot_host) and not robot_host.startswith("CHANGE_ME") and tcp_ok(
+            robot_host, state_port
+        )
+        bridge_ok = follower_ok
+    else:
+        follower_ok = (
+            bool(follower) and not follower.startswith("CHANGE_ME") and Path(follower).exists()
+        )
+        bridge_ok = False
     return {
-        "follower_port": follower,
+        "follower_port": follower if not remote else f"remote://{robot_host}:{state_port}",
         "leader_port": leader,
         "follower_id": ports.get("FOLLOWER_ID", ""),
         "leader_id": ports.get("LEADER_ID", ""),
-        "follower_ok": bool(follower) and not follower.startswith("CHANGE_ME") and Path(follower).exists(),
+        "follower_backend": "remote" if remote else "local",
+        "robot_host": robot_host,
+        "robot_state_port": state_port,
+        "robot_cmd_port": cmd_port,
+        "bridge_ok": bridge_ok,
+        "follower_ok": follower_ok,
         "leader_ok": bool(leader) and not leader.startswith("CHANGE_ME") and Path(leader).exists(),
     }
 
@@ -275,6 +370,11 @@ def api_status():
     age = None if _stats["last_ts"] <= 0 else round(time.time() - _stats["last_ts"], 2)
     host, port = CFG["zmq_host"], int(CFG.get("zmq_port") or "5555")
     ts, label = last_banner()
+    with _jpeg_lock:
+        live_ids = list(_stats.get("stream_ids") or sorted(_latest_jpegs))
+        depth_live = list(_stats.get("depth_ids") or [])
+    names = camera_names_from_cfg()
+    streams = stream_catalog(live_ids)
     return {
         "state": state,
         "elapsed_s": round(elapsed_s(state), 1),
@@ -283,7 +383,8 @@ def api_status():
         "camera": {
             "backend": CFG["backend"],
             "name": CFG["camera_name"],
-            "names": [n.strip() for n in CFG.get("camera_names", CFG["camera_name"]).split(",") if n.strip()],
+            "names": names,
+            "depth_names": depth_camera_names(names),
             "host": host,
             "port": port,
             "reachable": tcp_ok(host, port) if CFG["backend"] == "zmq" else age is not None and age < 3,
@@ -291,10 +392,14 @@ def api_status():
             "fps": round(_stats["fps"], 1),
             "frames": _stats["n"],
             "depth_ok": bool(_stats.get("depth_ok")),
+            "live_ids": live_ids,
+            "depth_live": depth_live,
+            "use_depth": bool(CFG.get("use_depth")),
         },
+        "streams": streams,
         "arms": arm_status(),
         "v1": True,
-        "hint": "Dashboard is the live viz — cameras/depth here; joints while recording",
+        "hint": "Dashboard streams every RGB/depth view from camera.env; joints while record/eval",
     }
 
 

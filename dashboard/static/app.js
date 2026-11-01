@@ -1,9 +1,10 @@
 const stateEl = document.getElementById("state");
 const timerEl = document.getElementById("timer");
 const omenEl = document.getElementById("omen-pill");
+const bridgeEl = document.getElementById("bridge-pill");
 const hwEl = document.getElementById("hw");
 const logEl = document.getElementById("log");
-const camName = document.getElementById("cam-name-overhead");
+const camsEl = document.getElementById("cams");
 const camMeta = document.getElementById("cam-meta");
 const toastEl = document.getElementById("toast");
 const jointsEl = document.getElementById("joints");
@@ -12,6 +13,7 @@ const jointsPanel = document.querySelector(".panel.joints");
 
 let toastTimer = 0;
 let jointRows = null;
+let streamKey = "";
 
 function toast(msg) {
   toastEl.hidden = false;
@@ -45,7 +47,6 @@ function row(k, v, ok) {
 }
 
 function normPct(v) {
-  // Feetech body joints ~[-100,100] or degrees; gripper ~[0,100]. Map to bar width.
   const x = Number(v) || 0;
   const pct = ((x + 100) / 200) * 100;
   return Math.max(0, Math.min(100, pct));
@@ -55,22 +56,61 @@ function ensureJointRows(names) {
   if (jointRows && jointRows.length === names.length) return;
   jointsEl.replaceChildren();
   jointRows = names.map((name) => {
-    const row = document.createElement("div");
-    row.className = "joint-row";
-    row.innerHTML = `
+    const rowEl = document.createElement("div");
+    rowEl.className = "joint-row";
+    rowEl.innerHTML = `
       <span class="name">${name}</span>
       <div class="joint-bars">
         <div class="bar-track"><div class="bar-fill state"></div></div>
         <div class="bar-track"><div class="bar-fill action"></div></div>
       </div>
       <span class="vals">—</span>`;
-    jointsEl.appendChild(row);
+    jointsEl.appendChild(rowEl);
     return {
-      stateFill: row.querySelector(".bar-fill.state"),
-      actionFill: row.querySelector(".bar-fill.action"),
-      vals: row.querySelector(".vals"),
+      stateFill: rowEl.querySelector(".bar-fill.state"),
+      actionFill: rowEl.querySelector(".bar-fill.action"),
+      vals: rowEl.querySelector(".vals"),
     };
   });
+}
+
+function renderStreams(streams) {
+  const key = (streams || []).map((s) => s.id).join("|");
+  if (key === streamKey) {
+    (streams || []).forEach((s) => {
+      const slot = camsEl.querySelector(`[data-stream="${CSS.escape(s.id)}"]`);
+      if (!slot) return;
+      slot.classList.toggle("live", !!s.live);
+      slot.classList.toggle("waiting", !s.live);
+      const badge = slot.querySelector(".live-badge");
+      if (badge) badge.textContent = s.live ? "live" : "waiting";
+    });
+    return;
+  }
+  streamKey = key;
+  camsEl.replaceChildren();
+  (streams || []).forEach((s) => {
+    const slot = document.createElement("div");
+    slot.className = `cam-slot ${s.kind || "rgb"} ${s.live ? "live" : "waiting"}`;
+    slot.dataset.stream = s.id;
+    slot.innerHTML = `
+      <div class="panel-h">
+        <h1>${s.label || s.id}</h1>
+        <span class="live-badge muted">${s.live ? "live" : "waiting"}</span>
+      </div>
+      <div class="stage">
+        <img src="${s.url}?t=${Date.now()}" alt="${s.label || s.id}"/>
+      </div>`;
+    camsEl.appendChild(slot);
+  });
+  if (!(streams || []).length) {
+    const empty = document.createElement("div");
+    empty.className = "cam-slot waiting";
+    empty.innerHTML = `
+      <div class="panel-h"><h1>no streams</h1></div>
+      <div class="stage empty-hint">Set CAMERA_NAMES in camera.env</div>`;
+    camsEl.appendChild(empty);
+  }
 }
 
 async function refreshJoints() {
@@ -78,19 +118,19 @@ async function refreshJoints() {
   const j = await r.json();
   const names = j.names || [];
   if (!names.length) {
-    jointsMeta.textContent = "waiting for record…";
+    jointsMeta.textContent = "waiting for record/eval…";
     jointsPanel.classList.add("stale");
     return;
   }
   ensureJointRows(names);
   const state = j.state || [];
   const action = j.action || [];
-  jointRows.forEach((row, i) => {
+  jointRows.forEach((rowEl, i) => {
     const s = state[i];
     const a = action[i];
-    row.stateFill.style.width = `${normPct(s)}%`;
-    row.actionFill.style.width = `${normPct(a)}%`;
-    row.vals.textContent = `${Number(s).toFixed(1)} / ${Number(a).toFixed(1)}`;
+    rowEl.stateFill.style.width = `${normPct(s)}%`;
+    rowEl.actionFill.style.width = `${normPct(a)}%`;
+    rowEl.vals.textContent = `${Number(s).toFixed(1)} / ${Number(a).toFixed(1)}`;
   });
   if (j.fresh) {
     jointsMeta.textContent = "live";
@@ -109,27 +149,63 @@ async function refresh() {
   stateEl.className = `pill ${clsFor(st)}`;
   timerEl.textContent = fmtTime(s.elapsed_s);
   const cam = s.camera || {};
-  const names = cam.names || [cam.name || "wrist"];
-  if (camName) camName.textContent = names.join(" + ");
+  const streams = s.streams || [];
+  renderStreams(streams);
+
   if (camMeta) {
+    const nLive = (cam.live_ids || []).length;
     camMeta.textContent = cam.backend === "zmq"
-      ? `${cam.host}:${cam.port}`
-      : `opencv`;
+      ? `${cam.host}:${cam.port} · ${nLive}/${streams.length || "?"} live · ${cam.fps ?? "—"} fps`
+      : `opencv · ${cam.fps ?? "—"} fps`;
   }
   omenEl.textContent = cam.reachable ? "OMEN UP" : "OMEN DOWN";
   omenEl.className = `pill ${cam.reachable ? "ok" : "bad"}`;
 
   const arms = s.arms || {};
+  const remote = (arms.follower_backend || "local") === "remote";
+  if (remote) {
+    bridgeEl.hidden = false;
+    bridgeEl.textContent = arms.bridge_ok ? "BRIDGE UP" : "BRIDGE DOWN";
+    bridgeEl.className = `pill ${arms.bridge_ok ? "ok" : "bad"}`;
+  } else {
+    bridgeEl.hidden = true;
+  }
+
   const age = cam.last_frame_age_s == null ? "—" : `${cam.last_frame_age_s}s`;
-  hwEl.replaceChildren(
-    row("Omen", cam.reachable ? "reachable :5555" : "not reachable", cam.reachable),
+  const depthNames = (cam.depth_names || []).join(", ") || "—";
+  const depthLive = (cam.depth_live || []).map((id) => id.replace(/_depth$/, "")).join(", ");
+  const rows = [
+    row("Omen", cam.reachable ? `reachable :${cam.port || 5555}` : "not reachable", cam.reachable),
+    row("Streams", `${(cam.live_ids || []).length}/${streams.length || 0} live`, (cam.live_ids || []).length > 0),
     row("Frame age", age, cam.last_frame_age_s != null && cam.last_frame_age_s < 2),
     row("FPS", cam.fps ?? "—", cam.fps > 1),
-    row("Wrist depth", cam.depth_ok ? "streaming" : "no depth yet", cam.depth_ok),
-    row("Follower", arms.follower_ok ? arms.follower_port : (arms.follower_port || "missing"), arms.follower_ok),
-    row("Leader", arms.leader_ok ? arms.leader_port : (arms.leader_port || "missing"), arms.leader_ok),
+    row("Depth", cam.depth_ok ? (depthLive || depthNames) : "no depth yet", cam.depth_ok),
+  ];
+  if (remote) {
+    rows.push(
+      row(
+        "Bridge",
+        arms.bridge_ok
+          ? `${arms.robot_host}:${arms.robot_state_port}/${arms.robot_cmd_port}`
+          : (arms.follower_port || "down"),
+        !!arms.bridge_ok,
+      ),
+    );
+  }
+  rows.push(
+    row(
+      "Follower",
+      arms.follower_ok ? arms.follower_port : (arms.follower_port || "missing"),
+      !!arms.follower_ok,
+    ),
+    row(
+      "Leader",
+      arms.leader_ok ? arms.leader_port : (arms.leader_port || "missing"),
+      !!arms.leader_ok,
+    ),
     row("Last session", s.last_banner || "—"),
   );
+  hwEl.replaceChildren(...rows);
 }
 
 function bindLogs() {

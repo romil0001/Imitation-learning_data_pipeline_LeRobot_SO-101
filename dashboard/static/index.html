@@ -16,40 +16,17 @@
       <span id="state" class="pill idle">IDLE</span>
       <span id="timer" class="timer">00:00.0</span>
       <span id="omen-pill" class="pill ghost">OMEN …</span>
+      <span id="bridge-pill" class="pill ghost" hidden>BRIDGE …</span>
     </div>
   </header>
 
   <main class="grid">
     <section class="panel cam">
-      <div class="cams">
-        <div class="cam-slot">
-          <div class="panel-h">
-            <h1 id="cam-name-overhead">overhead</h1>
-            <span class="muted">USB webcam</span>
-          </div>
-          <div class="stage">
-            <img id="feed-overhead" src="/mjpeg/overhead" alt="overhead live"/>
-          </div>
-        </div>
-        <div class="cam-slot">
-          <div class="panel-h">
-            <h1 id="cam-name-wrist">wrist</h1>
-            <span class="muted">D405</span>
-          </div>
-          <div class="stage">
-            <img id="feed-wrist" src="/mjpeg/wrist" alt="wrist live"/>
-          </div>
-        </div>
-        <div class="cam-slot">
-          <div class="panel-h">
-            <h1>wrist depth</h1>
-            <span class="muted">D405 Z16</span>
-          </div>
-          <div class="stage">
-            <img id="feed-wrist-depth" src="/mjpeg/wrist_depth" alt="wrist depth"/>
-          </div>
-        </div>
+      <div class="panel-h">
+        <h1>Live streams</h1>
+        <span id="cam-meta" class="muted">waiting…</span>
       </div>
+      <div class="cams" id="cams"></div>
     </section>
 
     <aside class="side">
@@ -60,7 +37,7 @@
       <section class="panel joints">
         <div class="panel-h">
           <h1>Joints</h1>
-          <span id="joints-meta" class="muted">waiting for record…</span>
+          <span id="joints-meta" class="muted">waiting for record/eval…</span>
         </div>
         <div class="joint-legend">
           <span class="lg state">state</span>
@@ -75,7 +52,7 @@
           <li><kbd>A</kbd> start episode — run <code>scripts/08_record.sh</code></li>
           <li><kbd>n</kbd> / <kbd>r</kbd> / <kbd>q</kbd> in the record terminal</li>
         </ul>
-        <p class="muted small">Live cameras + depth here. Joint bars update while recording. Keep Omen publisher + <code>09_dashboard.sh</code> running.</p>
+        <p class="muted small">Every RGB + depth view from <code>camera.env</code> streams here. Joints update during record/eval. Keep Omen publisher (+ robot_bridge if remote) and <code>09_dashboard.sh</code> running.</p>
       </section>
     </aside>
 
