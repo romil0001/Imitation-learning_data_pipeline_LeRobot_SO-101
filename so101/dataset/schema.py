@@ -29,15 +29,25 @@ class DatasetMeta:
     camera_names: tuple[str, ...] = ()
     use_depth: bool = False
     depth_camera_name: str = "wrist"
+    # Extra depth streams (e.g. wrist+base). Empty → fall back to (depth_camera_name,).
+    depth_camera_names: tuple[str, ...] = ()
 
     def names(self) -> tuple[str, ...]:
         if self.camera_names:
             return tuple(self.camera_names)
         return (self.camera_name,)
 
+    def depth_names(self) -> tuple[str, ...]:
+        if not self.use_depth:
+            return ()
+        if self.depth_camera_names:
+            return tuple(self.depth_camera_names)
+        return (self.depth_camera_name,)
+
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["camera_names"] = list(self.names())
+        data["depth_camera_names"] = list(self.depth_names())
         return data
 
     @classmethod
@@ -47,6 +57,13 @@ class DatasetMeta:
         camera_name = str(data["camera_name"]) if data.get("camera_name") else camera_names[0]
         if not camera_names:
             camera_names = (camera_name,)
+        raw_depth_names = data.get("depth_camera_names")
+        depth_camera_names = tuple(str(x) for x in raw_depth_names) if raw_depth_names else ()
+        depth_camera_name = str(data.get("depth_camera_name", "wrist"))
+        if not depth_camera_names and bool(data.get("use_depth", False)):
+            depth_camera_names = (depth_camera_name,)
+        if depth_camera_names and depth_camera_name not in depth_camera_names:
+            depth_camera_name = depth_camera_names[0]
         return cls(
             name=str(data["name"]),
             fps=int(data["fps"]),
@@ -58,7 +75,8 @@ class DatasetMeta:
             episode_count=int(data["episode_count"]),
             camera_names=camera_names,
             use_depth=bool(data.get("use_depth", False)),
-            depth_camera_name=str(data.get("depth_camera_name", "wrist")),
+            depth_camera_name=depth_camera_name,
+            depth_camera_names=depth_camera_names,
         )
 
 
@@ -67,13 +85,21 @@ class EpisodeMeta:
     index: int
     num_frames: int
     task: str
+    source: str = "teleop"
+    intervention: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EpisodeMeta:
-        return cls(index=int(data["index"]), num_frames=int(data["num_frames"]), task=str(data["task"]))
+        return cls(
+            index=int(data["index"]),
+            num_frames=int(data["num_frames"]),
+            task=str(data["task"]),
+            source=str(data.get("source", "teleop")),
+            intervention=bool(data.get("intervention", False)),
+        )
 
 
 @dataclass
@@ -88,6 +114,9 @@ class Episode:
     camera_name: str
     video_paths: dict[str, Path] | None = None
     depth_path: Path | None = None
+    depth_paths: dict[str, Path] | None = None
+    source: str = "teleop"
+    intervention: bool = False
 
     def load_frames(self, camera_name: str | None = None) -> Any:
         from so101.dataset.video import read_mp4
@@ -96,9 +125,17 @@ class Episode:
         paths = self.video_paths or {self.camera_name: self.video_path}
         return read_mp4(paths[name])
 
-    def load_depth(self) -> Any:
+    def load_depth(self, camera_name: str | None = None) -> Any:
         import numpy as np
 
-        if self.depth_path is None or not self.depth_path.is_file():
-            raise FileNotFoundError(f"No depth file for episode {self.index}")
-        return np.load(self.depth_path)
+        if camera_name is None:
+            if self.depth_path is not None and self.depth_path.is_file():
+                return np.load(self.depth_path)
+            if self.depth_paths:
+                camera_name = next(iter(self.depth_paths))
+        paths = self.depth_paths or {}
+        if camera_name and camera_name in paths and paths[camera_name].is_file():
+            return np.load(paths[camera_name])
+        if self.depth_path is not None and self.depth_path.is_file():
+            return np.load(self.depth_path)
+        raise FileNotFoundError(f"No depth file for episode {self.index} camera={camera_name!r}")

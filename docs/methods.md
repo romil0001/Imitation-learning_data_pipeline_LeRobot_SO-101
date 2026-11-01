@@ -54,11 +54,13 @@ learned map from cameras and joint state to a 6-D action. The lists, the shared
 
 ### ACT (Action Chunking Transformer)
 
-Implementation follows Zhao et al. (2023): ResNet18 backbone, CVAE latent,
-transformer encoder–decoder, action chunks of size 100, L1 + KL loss.
-Training: episode-level holdout (`val_frac=0.2`, fixed seed), checkpoint
-selection on offline `val_l1` (`best_val/`). Eval: temporal ensemble over
- overlapping chunks.
+Implementation follows Zhao et al. (2023) with LeRobot-aligned defaults:
+ResNet18 + FrozenBatchNorm, CVAE latent, 1 decoder layer (post-norm), action
+chunks of size 100, L1 + KL loss. Training: AdamW `lr=1e-5`,
+`weight_decay=1e-4`, episode-level holdout (`val_frac=0.2`, fixed seed),
+checkpoint selection on offline `val_l1` (`best_val/`). Eval: temporal
+ensemble over overlapping chunks (`ensemble_temp=0.01`; set to `null` for
+open-loop action queue).
 
 Optional: RGB + normalized wrist depth in the vision stack; JAX/Flax `tiny`
  backbone via `--backend jax`.
@@ -68,6 +70,25 @@ Optional: RGB + normalized wrist depth in the vision stack; JAX/Flax `tiny`
 Demonstrations converted to LeRobot format (`python -m so101 convert`); fine-tune
 with language task conditioning. **Depth is dropped** at export. Eval uses the
 same camera names and task string as recording.
+
+### Human-gated DAgger
+
+After a scored ACT baseline, `python -m so101 dagger` (or `bash scripts/18_dagger.sh`)
+rolls the policy out on the follower. The leader stays still until **p**. Pause
+holds the follower, moves the leader onto that pose (~1.6 s), then disables
+torque so the operator can grab it with no jump. **c** records only the
+correction. Those frames are expert actions on states the policy actually
+visited (Ross et al., 2011; Kelly et al., HG-DAgger, 2019). Autonomous frames
+are not saved as demonstrations.
+
+`python -m so101 train --corrections <name>` (or `bash scripts/19_train_dagger.sh`)
+merges demos and corrections, forces correction episodes into the train split,
+and fine-tunes from the baseline `best_val` into a new checkpoint directory.
+Re-score with the same protocol and diff the two `summary.json` files:
+
+```bash
+python -m so101 compare-eval --baseline <first>/summary.json --candidate <dagger>/summary.json
+```
 
 ### Hybrid (depth-assisted grasp)
 
@@ -99,6 +120,10 @@ Outcome graphs: [`outcomes.md`](outcomes.md).
 
 - Zhao, T. et al. (2023). Learning Fine-Grained Bimanual Manipulation with
   Low-Cost Hardware. *CoRL* — ACT.
+- Ross, S. et al. (2011). A Reduction of Imitation Learning and Structured
+  Prediction to No-Regret Online Learning. *AISTATS* — DAgger.
+- Kelly, M. et al. (2019). HG-DAgger: Interactive Imitation Learning with
+  Human Experts. *ICRA*.
 - Hugging Face LeRobot SO-101 documentation:
   https://huggingface.co/docs/lerobot/en/so101
 - SmolVLA: LeRobot vision-language-action model (fine-tuned locally via

@@ -36,6 +36,27 @@ def test_inspect_prints_episode_count(tmp_path: Path, capsys) -> None:
     assert "state_mean" in out
 
 
+def test_replay_capture_parser() -> None:
+    args = build_parser().parse_args(
+        [
+            "replay-capture",
+            "--source",
+            "so101_d405_demo",
+            "--dest",
+            "so101_keys_in_cup",
+            "--task",
+            "keys in the cup",
+            "--episode",
+            "0",
+            "-y",
+        ]
+    )
+    assert args.source == "so101_d405_demo"
+    assert args.dest == "so101_keys_in_cup"
+    assert args.task == "keys in the cup"
+    assert args.episode == 0
+
+
 def test_train_parser_gdm_flags() -> None:
     args = build_parser().parse_args(
         ["train", "--algo", "act-jax", "--val-frac", "0.2", "--seed", "0", "--eval-every", "1000"]
@@ -44,6 +65,37 @@ def test_train_parser_gdm_flags() -> None:
     assert args.val_frac == 0.2
     assert args.seed == 0
     assert args.eval_every == 1000
+
+
+def test_train_parser_dagger_flags() -> None:
+    args = build_parser().parse_args(
+        [
+            "train",
+            "--corrections",
+            "so101_d405_demo_dagger",
+            "--init-checkpoint",
+            "outputs/train/act_so101_d405_demo",
+            "--steps",
+            "8000",
+        ]
+    )
+    assert args.corrections == "so101_d405_demo_dagger"
+    assert args.init_checkpoint.endswith("act_so101_d405_demo")
+    assert args.steps == 8000
+
+
+def test_dagger_and_compare_eval_parsers() -> None:
+    dg = build_parser().parse_args(
+        ["dagger", "--dataset", "so101_d405_demo", "--num-episodes", "3", "--policy", "act", "-y"]
+    )
+    assert dg.num_episodes == 3
+    assert dg.policy == "act"
+    assert dg.yes is True
+    cmp = build_parser().parse_args(
+        ["compare-eval", "--baseline", "a/summary.json", "--candidate", "b/summary.json"]
+    )
+    assert cmp.baseline.endswith("a/summary.json")
+    assert cmp.candidate.endswith("b/summary.json")
 
 
 def test_eval_parser_hybrid_flags() -> None:
@@ -66,6 +118,39 @@ def test_eval_parser_hybrid_flags() -> None:
     assert "keys" in args.task
 
 
+def test_eval_parser_recipe_flags() -> None:
+    args = build_parser().parse_args(
+        [
+            "eval",
+            "--policy",
+            "gemfuse",
+            "--recipe",
+            "config/recipes/gemfuse_1p3b_r18.json",
+            "--n-action-steps",
+            "5",
+            "--async-replan",
+            "--replan-threshold",
+            "25",
+            "--low-pass",
+            "0.3",
+            "--freespace-scale",
+            "2.0",
+        ]
+    )
+    assert args.policy == "gemfuse"
+    assert args.recipe.endswith("gemfuse_1p3b_r18.json")
+    assert args.n_action_steps == 5
+    assert args.async_replan is True
+    assert args.replan_threshold == 25
+    assert args.low_pass == 0.3
+    assert args.freespace_scale == 2.0
+
+
+def test_eval_parser_no_async_replan() -> None:
+    args = build_parser().parse_args(["eval", "--no-async-replan"])
+    assert args.async_replan is False
+
+
 def test_eval_parser_accepts_new_policy_name() -> None:
     args = build_parser().parse_args(["eval", "--policy", "my_policy", "--policy-base", "my_policy"])
     assert args.policy == "my_policy"
@@ -79,6 +164,7 @@ def test_algorithms_command_prints_both_families(capsys) -> None:
     assert "ML" in out
     assert "depth-grasp" in out
     assert "act-jax" in out
+    assert "gemfuse" in out
     assert "my_policy" not in out
 
 

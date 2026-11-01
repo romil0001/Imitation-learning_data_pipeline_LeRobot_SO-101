@@ -16,26 +16,54 @@ def load_act(ctx: LoadContext) -> Any:
     return ACTPolicy.load(ckpt, device=ctx.device)
 
 
+def _normalize_smolvla_checkpoint(path: Path) -> Path | None:
+    """Map a train-run dir or checkpoint root to the HF ``pretrained_model`` folder.
+
+    Accepts:
+    - ``.../pretrained_model`` (already loadable)
+    - ``.../checkpoints/<step>`` (has ``pretrained_model/``)
+    - ``.../smolvla_<job>`` train output (has ``checkpoints/last`` or numbered steps)
+    """
+    if not path.is_dir():
+        return None
+    if (path / "config.json").is_file():
+        return path
+    nested = path / "pretrained_model"
+    if (nested / "config.json").is_file():
+        return nested
+    last = path / "checkpoints" / "last" / "pretrained_model"
+    if (last / "config.json").is_file():
+        return last.resolve()
+    ckpts = sorted(
+        p for p in path.glob("checkpoints/*/pretrained_model") if (p / "config.json").is_file()
+    )
+    if ckpts:
+        # Prefer numeric step dirs over a dangling ``last`` name when both appear in the glob.
+        numeric = [p for p in ckpts if p.parent.name.isdigit()]
+        return (numeric[-1] if numeric else ckpts[-1]).resolve()
+    return None
+
+
 def _resolve_smolvla_checkpoint(root: Path, checkpoint: str, dataset_name: str) -> Path:
+    candidates: list[Path] = []
     if checkpoint:
-        return Path(checkpoint)
-    candidates = [
-        root / "outputs" / "train" / f"smolvla_{dataset_name}",
-        root / "outputs" / "train" / f"smolvla_{dataset_name}" / "checkpoints" / "last" / "pretrained_model",
-    ]
+        candidates.append(Path(checkpoint))
+    candidates.extend(
+        [
+            root / "outputs" / "train" / f"smolvla_{dataset_name}",
+            root
+            / "outputs"
+            / "train"
+            / f"smolvla_{dataset_name}"
+            / "checkpoints"
+            / "last"
+            / "pretrained_model",
+        ]
+    )
     for candidate in candidates:
-        if candidate.is_dir() and (
-            (candidate / "config.json").is_file()
-            or (candidate / "pretrained_model" / "config.json").is_file()
-            or any(candidate.glob("**/config.json"))
-        ):
-            nested = candidate / "pretrained_model"
-            if nested.is_dir():
-                return nested
-            ckpts = sorted(candidate.glob("checkpoints/*/pretrained_model"))
-            if ckpts:
-                return ckpts[-1]
-            return candidate
+        resolved = _normalize_smolvla_checkpoint(candidate)
+        if resolved is not None:
+            return resolved
     raise FileNotFoundError(
         f"No SmolVLA checkpoint under outputs/train/smolvla_{dataset_name}. "
         "Convert + train first: bash scripts/13_convert_lerobot.sh && bash scripts/14_train_smolvla.sh"
@@ -104,4 +132,6 @@ def train_act(ctx: TrainContext) -> Path:
         seed=ctx.seed,
         eval_every=ctx.eval_every,
         backend=backend,
+        corrections_name=ctx.corrections_name,
+        init_checkpoint=ctx.init_checkpoint,
     )

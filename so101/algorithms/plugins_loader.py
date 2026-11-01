@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 
@@ -22,10 +23,25 @@ def load_plugins(directory: Path | None = None) -> list[str]:
     loaded: list[str] = []
     for path in discover_plugin_files(directory):
         module_name = f"so101_algo_plugin_{path.stem}"
+        if module_name in sys.modules:
+            loaded.append(path.stem)
+            continue
+        # Prefer the package import path so plugins can `import so101.algorithms.plugins.x`.
+        pkg_name = f"so101.algorithms.plugins.{path.stem}"
+        if pkg_name in sys.modules:
+            loaded.append(path.stem)
+            continue
         spec = importlib.util.spec_from_file_location(module_name, path)
         if spec is None or spec.loader is None:
             continue
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except ValueError as exc:
+            # Already registered via a prior package import of the same plugin.
+            if "already registered" not in str(exc):
+                raise
+        else:
+            sys.modules[module_name] = module
         loaded.append(path.stem)
     return loaded

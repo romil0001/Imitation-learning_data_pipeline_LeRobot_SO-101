@@ -26,6 +26,7 @@ They do not learn a mapping from images to actions.
 | `omen-publish` | Wrist RGB + depth and overhead JPEG over ZMQ | `python omen/publish_d405.py` |
 | `teleoperate` | Leader drives follower, no logging | `bash scripts/06_teleoperate.sh` |
 | `record` | Demos → `data/datasets/<name>/` | `python -m so101 record` |
+| `dagger` | Policy rollout + human corrections only | `bash scripts/18_dagger.sh` |
 | `replay` | Open-loop `action.npy` | `python -m so101 replay` |
 | `home` | Joint-space move to the mean demo start | used by eval |
 | `depth-grasp` | Wrist-depth override near contact | `config/hybrid_grasp.yaml` |

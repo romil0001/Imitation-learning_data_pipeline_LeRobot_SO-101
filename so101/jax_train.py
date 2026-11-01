@@ -55,7 +55,8 @@ def train_jax(
     eval_every: int = 1000,
     grad_clip: float = 1.0,
     lr_backbone: float = 1e-5,
-    lr_rest: float = 1e-4,
+    lr_rest: float = 1e-5,
+    weight_decay: float = 1e-4,
 ) -> Path:
     dataset_root = Path(dataset_root)
     output_dir = Path(output_dir)
@@ -110,6 +111,7 @@ def train_jax(
         "camera_names": list(ds.meta.names()),
         "lr_backbone": lr_backbone,
         "lr_rest": lr_rest,
+        "weight_decay": weight_decay,
         "grad_clip": grad_clip,
         "backend": "jax",
     }
@@ -120,7 +122,10 @@ def train_jax(
     rng, init_rng = jax.random.split(rng)
     params = init_act_params(cfg, init_rng, n_cams=n_cams)
     module = ACTModule(cfg)
-    tx = optax.chain(optax.clip_by_global_norm(grad_clip), optax.adam(lr_rest))
+    tx = optax.chain(
+        optax.clip_by_global_norm(grad_clip),
+        optax.adamw(lr_rest, weight_decay=weight_decay),
+    )
     opt_state = tx.init(params)
 
     @jax.jit

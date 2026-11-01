@@ -27,6 +27,7 @@ def replay_from_env(*, dataset_name: str = "so101_d405_demo", episode: int = 0, 
     from so101.config import load_ports, project_root
     from so101.dataset import SO101Dataset
     from so101.hardware import make_follower
+    from so101.home import safe_power_down
 
     ports = load_ports()
     root = project_root() / "data" / "datasets" / dataset_name
@@ -34,6 +35,7 @@ def replay_from_env(*, dataset_name: str = "so101_d405_demo", episode: int = 0, 
     if episode < 0 or episode >= ds.meta.episode_count:
         raise IndexError(f"Episode {episode} does not exist (count={ds.meta.episode_count})")
     ep = ds.load_episode(episode)
+    rest_pose = ep.state[0]
     print("FOLLOWER ONLY: USB + 12V ON. Leader can be OFF. Clear the workspace.")
     print(f"Replay episode {episode}  frames={ep.num_frames}  fps={ds.meta.fps}")
     if confirm:
@@ -42,5 +44,14 @@ def replay_from_env(*, dataset_name: str = "so101_d405_demo", episode: int = 0, 
     follower.connect()
     try:
         replay_episode(follower, ep, ds.meta.fps)
+    except KeyboardInterrupt:
+        print("\nCtrl-C — parking arm before disconnect.", flush=True)
+        raise SystemExit(130) from None
     finally:
-        follower.disconnect()
+        try:
+            safe_power_down(follower, rest_pose, sleep=time.sleep)
+        finally:
+            try:
+                follower.disconnect()
+            except Exception as exc:  # noqa: BLE001
+                print(f"disconnect: {exc}", flush=True)

@@ -9,7 +9,7 @@ Research docs: [`methods.md`](methods.md) · [`outcomes.md`](outcomes.md) · [`r
 This stack is a two-machine, no-ROS cell. Hugging Face LeRobot talks to the
 arms and (optionally) cameras. Everything else — dataset format, ACT, scored
 eval, hybrid depth grasp, and the operator dashboard — is local Python owned
-by this project.
+by this project (including HG-DAgger correction collection and fine-tune).
 
 ## Machines
 
@@ -46,13 +46,15 @@ Ports live in gitignored `config/ports.env`. Camera/ZMQ live in gitignored `conf
 |---------|------|
 | `algorithms` | List setup routines and ML policies (`--family setup` or `ml`) |
 | `record` | Leader → follower teleop; **n** save, **r** redo, **q** quit |
-| `train` | Train a registered ML policy (default ACT; `--algo act-jax` for Flax) |
+| `dagger` | HG-DAgger: policy rollout + **p**/**c** corrections only |
+| `train` | Train a registered ML policy (default ACT; `--corrections` for DAgger fine-tune) |
 | `eval` | Any registered ML policy, or hybrid + scored protocol |
+| `compare-eval` | Diff two protocol `summary.json` files (`pc_success` Δ) |
 | `convert` | Local dataset → LeRobot export for SmolVLA |
 | `replay` | Play one episode's `action.npy` on the follower |
 | `inspect` | Print `meta.json` / episode inventory |
 
-Numbered wrappers in `scripts/` call the same package (`08` record, `10` train, `11` eval, `12` replay, `13` convert, `14` SmolVLA, `15` hybrid).
+Numbered wrappers in `scripts/` call the same package (`08` record, `10` train, `11` eval, `12` replay, `13` convert, `14` SmolVLA, `15` hybrid, `18` DAgger, `19` DAgger train).
 
 LeRobot is imported only from `so101.hardware` (and SmolVLA wrap). Dataset I/O, models, and eval scoring do not go through Hub APIs.
 
@@ -65,19 +67,22 @@ so101/
   config.py         ports.env + camera.env
   hardware.py       SO-101 follower/leader + ZMQ cameras
   record.py         teleop loop
+  dagger.py         human-gated DAgger correction loop
+  leader_sync.py    move leader onto follower pose on pause
   replay.py         action replay
-  train.py          ACT training
+  train.py          ACT training (+ DAgger merge / fine-tune)
   eval.py           rollout + optional protocol
   eval_protocol.py  scored protocol eval (conditions × trials, y/n success)
+  compare_eval.py   baseline vs candidate protocol summaries
   convert_lerobot.py
   hybrid_policy.py  base policy + depth-grasp override
   depth_grasp.py    wrist-depth height assist
   live_viz.py       joint bars for the dashboard
   zmq_rgbd.py       RGB (+ depth) ZMQ client
-  models/act.py     ACT (Zhao et al. 2023), not a copy of LeRobot modeling_act
+  models/act.py     ACT (Zhao et al. 2023); LeRobot-aligned defaults (1 decoder layer, FrozenBN, temporal ensemble)
   models/act_jax.py optional Flax backend
   models/smolvla_wrap.py  numpy ↔ SmolVLA
-  dataset/          local episode folders
+  dataset/          local episode folders (+ combine.py for DAgger merge)
 omen/publish_d405.py
 dashboard/          FastAPI operator site (cameras, status, logs)
 ```

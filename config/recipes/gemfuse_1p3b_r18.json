@@ -1,0 +1,14 @@
+{
+  "name": "gemfuse_1p3b_r18",
+  "base": "act",
+  "backbone": "resnet18",
+  "post_id": "303653304",
+  "steps": 45000,
+  "n_action_steps": 5,
+  "async_replan": true,
+  "replan_threshold": 25,
+  "low_pass_alpha": 0.3,
+  "freespace_scale": 2.0,
+  "freespace_enter_mm": 180.0,
+  "checkpoint": ""
+}

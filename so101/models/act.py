@@ -1,4 +1,8 @@
-"""ACT: ResNet (or tiny) + CVAE transformer, action chunks. Zhao et al. 2023."""
+"""ACT: ResNet (or tiny) + CVAE transformer, action chunks. Zhao et al. 2023.
+
+Defaults are aligned with Hugging Face LeRobot ACT (1 decoder layer, post-norm,
+FrozenBatchNorm, lr 1e-5 + weight decay, temporal ensembling).
+"""
 
 from __future__ import annotations
 
@@ -25,13 +29,18 @@ class ACTConfig:
     n_heads: int = 8
     dim_feedforward: int = 3200
     n_encoder_layers: int = 4
-    n_decoder_layers: int = 7
+    # LeRobot / original ACT effective depth (paper lists 7 but only layer 0 ran).
+    n_decoder_layers: int = 1
+    n_vae_encoder_layers: int = 4
+    # LeRobot default: post-norm (pre_norm=False).
+    pre_norm: bool = False
     dropout: float = 0.1
     latent_dim: int = 32
     kl_weight: float = 10.0
     backbone: str = "resnet18"
     image_size: int = 224
-    ensemble_temp: float = 0.01
+    # Temporal ensembling coeff (Zhao et al.). None disables and uses action queue.
+    ensemble_temp: float | None = 0.01
     n_action_steps: int = 100
     use_depth: bool = False
     depth_camera_name: str = "wrist"
@@ -43,8 +52,70 @@ class ACTConfig:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ACTConfig:
+        """Load config; fill fields added in the LeRobot-alignment for older checkpoints."""
         fields = cls.__dataclass_fields__
-        return cls(**{k: v for k, v in data.items() if k in fields})
+        filtered = {k: v for k, v in data.items() if k in fields}
+        # Pre-alignment checkpoints used n_encoder//2 VAE layers and pre-norm.
+        if "n_vae_encoder_layers" not in data:
+            n_enc = int(filtered.get("n_encoder_layers", cls.n_encoder_layers))
+            filtered["n_vae_encoder_layers"] = max(1, n_enc // 2)
+        if "pre_norm" not in data:
+            filtered["pre_norm"] = True
+        return cls(**filtered)
+
+    def uses_temporal_ensemble(self) -> bool:
+        return self.ensemble_temp is not None
+
+
+class ACTTemporalEnsembler:
+    """Online exponential temporal ensembling (LeRobot ACTTemporalEnsembler / ACT Algo 2)."""
+
+    def __init__(self, temporal_ensemble_coeff: float, chunk_size: int) -> None:
+        self.chunk_size = int(chunk_size)
+        self.ensemble_weights = np.exp(
+            -float(temporal_ensemble_coeff) * np.arange(self.chunk_size, dtype=np.float64)
+        )
+        self.ensemble_weights_cumsum = np.cumsum(self.ensemble_weights)
+        self.reset()
+
+    def reset(self) -> None:
+        self.ensembled_actions: np.ndarray | None = None
+        self.ensembled_actions_count: np.ndarray | None = None
+
+    def update(self, actions: np.ndarray) -> np.ndarray:
+        """Update ensemble with a (chunk_size, action_dim) chunk; return next action."""
+        actions = np.asarray(actions, dtype=np.float64)
+        if actions.ndim != 2:
+            raise ValueError(f"expected (chunk, dim) actions, got shape {actions.shape}")
+        if actions.shape[0] != self.chunk_size:
+            raise ValueError(
+                f"chunk length {actions.shape[0]} != ensemble chunk_size {self.chunk_size}"
+            )
+        actions_b = actions[None, ...]
+        if self.ensembled_actions is None:
+            self.ensembled_actions = actions_b.copy()
+            self.ensembled_actions_count = np.ones((self.chunk_size, 1), dtype=np.int64)
+        else:
+            assert self.ensembled_actions_count is not None
+            count = self.ensembled_actions_count
+            w_prev = self.ensemble_weights_cumsum[count - 1]
+            w_new = self.ensemble_weights[count]
+            w_all = self.ensemble_weights_cumsum[count]
+            self.ensembled_actions = (
+                self.ensembled_actions * w_prev + actions_b[:, :-1] * w_new
+            ) / w_all
+            self.ensembled_actions_count = np.minimum(count + 1, self.chunk_size)
+            self.ensembled_actions = np.concatenate(
+                [self.ensembled_actions, actions_b[:, -1:]], axis=1
+            )
+            self.ensembled_actions_count = np.concatenate(
+                [self.ensembled_actions_count, np.ones_like(self.ensembled_actions_count[-1:])]
+            )
+        assert self.ensembled_actions is not None and self.ensembled_actions_count is not None
+        action = self.ensembled_actions[:, 0]
+        self.ensembled_actions = self.ensembled_actions[:, 1:]
+        self.ensembled_actions_count = self.ensembled_actions_count[1:]
+        return np.asarray(action[0], dtype=np.float32)
 
 
 class TinyBackbone(nn.Module):
@@ -64,12 +135,13 @@ class TinyBackbone(nn.Module):
 
 def _resnet18_trunk() -> nn.Module:
     import torchvision
+    from torchvision.ops.misc import FrozenBatchNorm2d
 
     try:
         weights = torchvision.models.ResNet18_Weights.IMAGENET1K_V1
-        net = torchvision.models.resnet18(weights=weights)
+        net = torchvision.models.resnet18(weights=weights, norm_layer=FrozenBatchNorm2d)
     except Exception:
-        net = torchvision.models.resnet18(weights=None)
+        net = torchvision.models.resnet18(weights=None, norm_layer=FrozenBatchNorm2d)
     return nn.Sequential(*list(net.children())[:-2])
 
 
@@ -95,7 +167,7 @@ class ACT(nn.Module):
             dropout=cfg.dropout,
             batch_first=True,
             activation="relu",
-            norm_first=True,
+            norm_first=cfg.pre_norm,
         )
         self.encoder = nn.TransformerEncoder(
             enc_layer, num_layers=cfg.n_encoder_layers, enable_nested_tensor=False
@@ -108,9 +180,9 @@ class ACT(nn.Module):
                 dropout=cfg.dropout,
                 batch_first=True,
                 activation="relu",
-                norm_first=True,
+                norm_first=cfg.pre_norm,
             ),
-            num_layers=max(1, cfg.n_encoder_layers // 2),
+            num_layers=max(1, int(cfg.n_vae_encoder_layers)),
             enable_nested_tensor=False,
         )
         self.mu = nn.Linear(cfg.dim_model, cfg.latent_dim)
@@ -122,7 +194,7 @@ class ACT(nn.Module):
             dropout=cfg.dropout,
             batch_first=True,
             activation="relu",
-            norm_first=True,
+            norm_first=cfg.pre_norm,
         )
         self.decoder = nn.TransformerDecoder(dec_layer, num_layers=cfg.n_decoder_layers)
         self.action_head = nn.Linear(cfg.dim_model, cfg.n_joints)
@@ -142,6 +214,13 @@ class ACT(nn.Module):
             )
         else:
             self.depth_encoder = None
+        self._reset_transformer_parameters()
+
+    def _reset_transformer_parameters(self) -> None:
+        for module in (self.encoder, self.decoder, self.latent_encoder):
+            for p in module.parameters():
+                if p.dim() > 1:
+                    nn.init.xavier_uniform_(p)
 
     def encode_images(self, images: torch.Tensor, depth: torch.Tensor | None = None) -> torch.Tensor:
         if images.ndim == 4:
@@ -261,16 +340,23 @@ class ACTPolicy:
         self.action_mean = np.asarray(stats["action_mean"], dtype=np.float32)
         self.action_std = np.asarray(stats["action_std"], dtype=np.float32)
         self._action_queue: deque[np.ndarray] = deque()
+        self._ensembler: ACTTemporalEnsembler | None = None
+        if self.cfg.uses_temporal_ensemble():
+            self._ensembler = ACTTemporalEnsembler(float(self.cfg.ensemble_temp), self.cfg.chunk_size)
 
     def reset(self) -> None:
         self._action_queue = deque()
+        if self._ensembler is not None:
+            self._ensembler.reset()
 
+    @torch.no_grad()
     def _predict_chunk(
         self,
         image_rgb: np.ndarray | list[np.ndarray] | tuple[np.ndarray, ...],
         state: np.ndarray,
         depth_u16: np.ndarray | None = None,
     ) -> np.ndarray:
+        # Decorated for AsyncReplanPolicy, which calls this outside select_action.
         if isinstance(image_rgb, (list, tuple)):
             imgs = [preprocess_image(im, self.cfg.image_size, self.cfg.backbone) for im in image_rgb]
             img = torch.stack(imgs, dim=0).unsqueeze(0).to(self.device)
@@ -285,7 +371,7 @@ class ACTPolicy:
             depth_t = preprocess_depth(depth_u16, self.cfg.image_size, self.cfg.depth_max_mm).unsqueeze(0).to(
                 self.device
             )
-        pred = self.model(images=img, state=st_t, depth=depth_t)["pred_actions"][0].cpu().numpy()
+        pred = self.model(images=img, state=st_t, depth=depth_t)["pred_actions"][0].detach().cpu().numpy()
         return pred * self.action_std + self.action_mean
 
     @torch.no_grad()
@@ -295,7 +381,11 @@ class ACTPolicy:
         state: np.ndarray,
         depth_u16: np.ndarray | None = None,
     ) -> np.ndarray:
-        # Match LeRobot ACT: fill a queue of n_action_steps, then pop. Do not replan every frame.
+        if self._ensembler is not None:
+            # Temporal ensembling requires a fresh chunk every env step (LeRobot).
+            chunk = self._predict_chunk(image_rgb, state, depth_u16=depth_u16)
+            return self._ensembler.update(chunk)
+        # Queue mode: fill n_action_steps, then pop. Do not replan every frame.
         if not self._action_queue:
             chunk = self._predict_chunk(image_rgb, state, depth_u16=depth_u16)
             n = min(int(self.cfg.n_action_steps), int(self.cfg.chunk_size), chunk.shape[0])

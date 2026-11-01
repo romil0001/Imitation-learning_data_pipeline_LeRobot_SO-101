@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from so101.dataset import JOINT_NAMES, DatasetMeta, EpisodeWriter, SO101Dataset, compute_stats, write_stats
-from so101.models.act import ACT, ACTConfig, ACTPolicy, find_policy_weights
+from so101.models.act import ACT, ACTConfig, ACTPolicy, ACTTemporalEnsembler, find_policy_weights
 from so101.train import split_episodes, train
 
 
@@ -23,12 +23,15 @@ def _tiny_cfg() -> ACTConfig:
         dim_feedforward=64,
         n_encoder_layers=1,
         n_decoder_layers=1,
+        n_vae_encoder_layers=1,
         latent_dim=8,
         kl_weight=10.0,
         backbone="tiny",
         image_size=32,
         dropout=0.0,
         n_action_steps=8,
+        # Queue mode in unit tests; production default enables temporal ensembling.
+        ensemble_temp=None,
     )
 
 
@@ -302,9 +305,52 @@ def test_train_two_steps_then_select_action(tmp_path: Path) -> None:
     assert a2.shape == (6,)
 
 
+def test_act_defaults_match_lerobot() -> None:
+    cfg = ACTConfig()
+    assert cfg.n_decoder_layers == 1
+    assert cfg.pre_norm is False
+    assert cfg.n_vae_encoder_layers == 4
+    assert cfg.ensemble_temp == 0.01
+    assert cfg.uses_temporal_ensemble()
+
+
+def test_act_from_dict_legacy_checkpoint_fields() -> None:
+    """Older train configs omit n_vae_encoder_layers / pre_norm — restore old topology."""
+    legacy = {
+        "n_joints": 6,
+        "chunk_size": 100,
+        "dim_model": 512,
+        "n_heads": 8,
+        "dim_feedforward": 3200,
+        "n_encoder_layers": 4,
+        "n_decoder_layers": 7,
+        "dropout": 0.1,
+        "latent_dim": 32,
+        "kl_weight": 10.0,
+        "backbone": "resnet18",
+        "image_size": 224,
+        "ensemble_temp": 0.01,
+        "n_action_steps": 80,
+        "use_depth": True,
+        "backend": "torch",
+    }
+    cfg = ACTConfig.from_dict(legacy)
+    assert cfg.n_decoder_layers == 7
+    assert cfg.n_vae_encoder_layers == 2
+    assert cfg.pre_norm is True
+    # Tiny backbone avoids torchvision; still checks VAE/decoder layer counts.
+    tiny = ACTConfig(**{**cfg.to_dict(), "backbone": "tiny", "dim_model": 32, "n_heads": 4, "dim_feedforward": 64})
+    model = ACT(tiny)
+    keys = model.state_dict()
+    assert "latent_encoder.layers.1.self_attn.in_proj_weight" in keys
+    assert "latent_encoder.layers.2.self_attn.in_proj_weight" not in keys
+    assert any(k.startswith("decoder.layers.6.") for k in keys)
+
+
 def test_select_action_replans_only_when_queue_empty() -> None:
     cfg = _tiny_cfg()
     cfg.n_action_steps = 4
+    assert cfg.ensemble_temp is None
     model = ACT(cfg)
     stats = {
         "state_mean": [0.0] * 6,
@@ -329,6 +375,62 @@ def test_select_action_replans_only_when_queue_empty() -> None:
     assert calls["n"] == 1
     policy.select_action(img, st)
     assert calls["n"] == 2
+
+
+def test_temporal_ensemble_replans_every_step() -> None:
+    cfg = ACTConfig(**{**_tiny_cfg().to_dict(), "ensemble_temp": 0.01})
+    model = ACT(cfg)
+    stats = {
+        "state_mean": [0.0] * 6,
+        "state_std": [1.0] * 6,
+        "action_mean": [0.0] * 6,
+        "action_std": [1.0] * 6,
+    }
+    policy = ACTPolicy(model, stats, device="cpu")
+    assert policy._ensembler is not None
+    calls = {"n": 0}
+    orig = policy._predict_chunk
+
+    def counted(image_rgb, state, depth_u16=None):
+        calls["n"] += 1
+        return orig(image_rgb, state, depth_u16=depth_u16)
+
+    policy._predict_chunk = counted  # type: ignore[method-assign]
+    img = np.zeros((32, 32, 3), dtype=np.uint8)
+    st = np.zeros(6, dtype=np.float32)
+    for _ in range(3):
+        a = policy.select_action(img, st)
+        assert a.shape == (6,)
+        assert np.isfinite(a).all()
+    assert calls["n"] == 3
+    policy.reset()
+    assert policy._ensembler.ensembled_actions is None
+
+
+def test_temporal_ensembler_matches_offline_average() -> None:
+    chunk_size = 4
+    ens = ACTTemporalEnsembler(0.01, chunk_size)
+    chunks = [np.full((chunk_size, 2), fill, dtype=np.float32) for fill in (1.0, 2.0, 3.0)]
+    actions = [ens.update(c) for c in chunks]
+    assert actions[0].shape == (2,)
+    # First step is just the first prediction for t=0.
+    np.testing.assert_allclose(actions[0], np.array([1.0, 1.0]), rtol=1e-5)
+    # Second step: older chunk0[t=1]=1 (w0) + newer chunk1[t=0]=2 (w1).
+    w = np.exp(-0.01 * np.arange(2))
+    expected = (w[0] * 1.0 + w[1] * 2.0) / w.sum()
+    np.testing.assert_allclose(actions[1], np.full(2, expected, dtype=np.float32), rtol=1e-5)
+
+
+def test_train_writes_lerobot_optimizer_defaults(tmp_path: Path) -> None:
+    root = _synthetic_dataset(tmp_path / "data")
+    out_dir = tmp_path / "ckpt"
+    train(dataset_root=root, output_dir=out_dir, steps=1, batch_size=2, config=_tiny_cfg(), device="cpu")
+    cfg = json.loads((out_dir / "config.json").read_text())
+    assert cfg["lr_rest"] == 1e-5
+    assert cfg["lr_backbone"] == 1e-5
+    assert cfg["weight_decay"] == 1e-4
+    assert cfg["n_decoder_layers"] == 1
+    assert cfg["pre_norm"] is False
 
 
 def test_train_stats_from_train_split_only(tmp_path: Path) -> None:

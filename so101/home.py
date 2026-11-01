@@ -40,3 +40,39 @@ def interpolate_to_qpos(
         follower.send_action(action_dict_from_qpos(q))
         if dt > 0:
             sleep(dt)
+
+
+def safe_power_down(
+    follower: Any,
+    target: np.ndarray | None,
+    *,
+    n_steps: int = 100,
+    dt: float = 0.05,
+    sleep: Callable[[float], None],
+    hold_s: float = 0.3,
+) -> None:
+    """Slowly park at ``target`` before torque-off disconnect (Ctrl-C / exit).
+
+    Avoids slamming the arm onto the table when ``disconnect()`` drops torque
+    mid-pose. A second Ctrl-C during the move aborts the interpolate and
+    returns so the caller can still disconnect.
+    """
+    if follower is None:
+        return
+    print("Slow power-down — moving to rest pose (Ctrl-C again skips park)…", flush=True)
+    try:
+        if target is not None:
+            interpolate_to_qpos(follower, target, n_steps=n_steps, dt=dt, sleep=sleep)
+            if hold_s > 0:
+                sleep(hold_s)
+        else:
+            # Hold current pose briefly so the bus isn't cut mid-command.
+            q = qpos_from_obs(follower.get_observation())
+            for _ in range(max(1, int(0.5 / max(dt, 1e-3)))):
+                follower.send_action(action_dict_from_qpos(q))
+                if dt > 0:
+                    sleep(dt)
+    except KeyboardInterrupt:
+        print("Park skipped — disconnecting.", flush=True)
+    except Exception as exc:  # noqa: BLE001 — best-effort shutdown
+        print(f"Power-down failed ({exc}); disconnecting anyway.", flush=True)

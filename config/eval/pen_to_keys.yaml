@@ -2,6 +2,7 @@ task: Place keys into metal cup
 timeout_s: 60
 n_trials_per_condition: 5
 # If omitted, home is the mean of episode state[0] in the eval dataset.
+home_qpos: [-1.846, -104.923, 46.857, 86.901, -4.615, 6.052]
 home_steps: 80
 home_dt: 0.04
 success_criterion: >

@@ -15,7 +15,13 @@ from flax import linen as nn
 from flax import serialization
 from flax.core import freeze, unfreeze
 
-from so101.models.act import ACTConfig, find_policy_weights, preprocess_depth, preprocess_image
+from so101.models.act import (
+    ACTConfig,
+    ACTTemporalEnsembler,
+    find_policy_weights,
+    preprocess_depth,
+    preprocess_image,
+)
 
 
 @dataclass
@@ -123,7 +129,7 @@ class ACTModule(nn.Module):
         if actions is not None:
             act_tok = nn.Dense(cfg.dim_model, name="action_proj")(actions)
             lat = jnp.concatenate([state_tok, act_tok], axis=1) + latent_pos[:, : 1 + cfg.chunk_size]
-            for i in range(max(1, cfg.n_encoder_layers // 2)):
+            for i in range(max(1, int(cfg.n_vae_encoder_layers))):
                 lat = TransformerBlock(cfg.dim_model, cfg.n_heads, cfg.dim_feedforward, cfg.dropout, name=f"lat_{i}")(
                     lat, train=train
                 )
@@ -204,9 +210,14 @@ class ACTPolicyJAX:
         self.action_mean = np.asarray(stats["action_mean"], dtype=np.float32)
         self.action_std = np.asarray(stats["action_std"], dtype=np.float32)
         self._action_queue: deque[np.ndarray] = deque()
+        self._ensembler: ACTTemporalEnsembler | None = None
+        if self.cfg.uses_temporal_ensemble():
+            self._ensembler = ACTTemporalEnsembler(float(self.cfg.ensemble_temp), self.cfg.chunk_size)
 
     def reset(self) -> None:
         self._action_queue = deque()
+        if self._ensembler is not None:
+            self._ensembler.reset()
 
     def _predict_chunk(
         self,
@@ -247,6 +258,9 @@ class ACTPolicyJAX:
         state: np.ndarray,
         depth_u16: np.ndarray | None = None,
     ) -> np.ndarray:
+        if self._ensembler is not None:
+            chunk = self._predict_chunk(image_rgb, state, depth_u16=depth_u16)
+            return self._ensembler.update(chunk)
         if not self._action_queue:
             chunk = self._predict_chunk(image_rgb, state, depth_u16=depth_u16)
             n = min(int(self.cfg.n_action_steps), int(self.cfg.chunk_size), chunk.shape[0])

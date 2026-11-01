@@ -78,8 +78,21 @@ def _load_eval_policy(
     image_height: int,
     image_width: int,
     grasp_config: str,
+    recipe: str = "",
+    n_action_steps: int | None = None,
+    async_replan: bool | None = None,
+    replan_threshold: int | None = None,
+    low_pass_alpha: float | None = None,
+    freespace_scale: float | None = None,
 ) -> Any:
     from so101.algorithms import LoadContext, load_policy
+    from so101.recipe import default_gemfuse_recipe_path
+
+    recipe_path = (recipe or "").strip()
+    if not recipe_path and policy_kind.strip().lower() == "gemfuse":
+        default = default_gemfuse_recipe_path(root)
+        if default.is_file():
+            recipe_path = str(default)
 
     ctx = LoadContext(
         checkpoint=checkpoint,
@@ -92,6 +105,12 @@ def _load_eval_policy(
         image_width=image_width,
         grasp_config=grasp_config,
         policy_base=policy_base,
+        recipe=recipe_path,
+        n_action_steps=n_action_steps,
+        async_replan=async_replan,
+        replan_threshold=replan_threshold,
+        low_pass_alpha=low_pass_alpha,
+        freespace_scale=freespace_scale,
     )
     return load_policy(policy_kind, ctx)
 
@@ -111,12 +130,18 @@ def eval_from_env(
     policy_base: str = "smolvla",
     grasp_config: str = "",
     task: str = "",
+    recipe: str = "",
+    n_action_steps: int | None = None,
+    async_replan: bool | None = None,
+    replan_threshold: int | None = None,
+    low_pass_alpha: float | None = None,
+    freespace_scale: float | None = None,
 ) -> int:
     from dataclasses import replace
 
     from so101.config import load_cameras, load_ports, project_root
     from so101.hardware import make_follower
-    from so101.home import interpolate_to_qpos
+    from so101.home import interpolate_to_qpos, safe_power_down
     from so101.keys import StdinKeys
     from so101.train import detect_device
 
@@ -147,12 +172,31 @@ def eval_from_env(
         image_height=cam0.height,
         image_width=cam0.width,
         grasp_config=grasp_config,
+        recipe=recipe,
+        n_action_steps=n_action_steps,
+        async_replan=async_replan,
+        replan_threshold=replan_threshold,
+        low_pass_alpha=low_pass_alpha,
+        freespace_scale=freespace_scale,
     )
     use_depth = bool(getattr(getattr(policy_obj, "cfg", None), "use_depth", False))
     depth_name = getattr(getattr(policy_obj, "cfg", None), "depth_camera_name", "wrist")
     ckpt_label = checkpoint or f"{policy}/{policy_base if policy == 'hybrid' else policy}"
     print("EVAL: follower USB + 12V ON. Leader can be OFF. Omen publisher must be streaming.")
     print(f"Policy kind: {policy}" + (f"  base={policy_base}" if policy == "hybrid" else ""))
+    if recipe.strip() or any(
+        v is not None
+        for v in (n_action_steps, async_replan, replan_threshold, low_pass_alpha, freespace_scale)
+    ):
+        print(
+            "Recipe:"
+            + (f" path={recipe}" if recipe.strip() else " (CLI overrides)")
+            + (f" n_action_steps={n_action_steps}" if n_action_steps is not None else "")
+            + (f" async_replan={async_replan}" if async_replan is not None else "")
+            + (f" replan_threshold={replan_threshold}" if replan_threshold is not None else "")
+            + (f" low_pass={low_pass_alpha}" if low_pass_alpha is not None else "")
+            + (f" freespace={freespace_scale}" if freespace_scale is not None else "")
+        )
     if use_depth:
         print(f"Depth: {depth_name} uint16 from ZMQ (Omen publisher must not use --no-depth)")
         if policy == "hybrid":
@@ -167,18 +211,21 @@ def eval_from_env(
     follower = make_follower(ports, cameras, with_cameras=True)
     follower.connect()
     depth_source = None
+    rest_pose = None
     if use_depth:
         from so101.zmq_rgbd import LatestZMQRGBD
 
         depth_source = LatestZMQRGBD(cam0.zmq_host, cam0.zmq_port)
     try:
         home = _dataset_home_qpos(root, dataset_name)
+        rest_pose = home
         if proto_path:
             from so101.eval_protocol import load_protocol, run_protocol
 
             loaded = load_protocol(proto_path)
             if loaded.home_qpos is None:
                 loaded = replace(loaded, home_qpos=home)
+            rest_pose = loaded.home_qpos
             print(f"Home qpos={list(loaded.home_qpos)}  steps={loaded.home_steps}  dt={loaded.home_dt}s")
             run_id = time.strftime("%Y%m%d_%H%M%S")
             safe_name = Path(str(ckpt_label).replace("/", "_")).name
@@ -212,7 +259,16 @@ def eval_from_env(
             depth_source=depth_source,
             depth_camera_name=depth_name,
         )
+    except KeyboardInterrupt:
+        print("\nCtrl-C — parking arm before disconnect.", flush=True)
+        raise SystemExit(130) from None
     finally:
-        if depth_source is not None:
-            depth_source.close()
-        follower.disconnect()
+        try:
+            safe_power_down(follower, rest_pose, sleep=time.sleep)
+        finally:
+            if depth_source is not None:
+                depth_source.close()
+            try:
+                follower.disconnect()
+            except Exception as exc:  # noqa: BLE001
+                print(f"disconnect: {exc}", flush=True)

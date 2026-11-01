@@ -28,6 +28,12 @@ class LoadContext:
     image_width: int
     grasp_config: str
     policy_base: str
+    recipe: str = ""
+    n_action_steps: int | None = None
+    async_replan: bool | None = None
+    replan_threshold: int | None = None
+    low_pass_alpha: float | None = None
+    freespace_scale: float | None = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,8 @@ class TrainContext:
     seed: int
     eval_every: int
     backend: str
+    corrections_name: str = ""
+    init_checkpoint: str = ""
 
 
 @dataclass(frozen=True)
@@ -131,13 +139,40 @@ def runnable_names() -> list[str]:
 
 
 def load_policy(name: str, ctx: LoadContext) -> Any:
+    from so101.policy_wrappers import apply_inference_recipe
+    from so101.recipe import RecipeConfig, load_recipe, merge_recipe_with_ctx
+
     algo = get(name)
     if algo.load is None:
         raise ValueError(
             f"{algo.name} is a setup algorithm ({algo.summary}). "
             f"Eval runs: {', '.join(runnable_names())}.\n{algo.run}"
         )
-    return algo.load(ctx)
+    policy = algo.load(ctx)
+    has_recipe = bool(ctx.recipe and str(ctx.recipe).strip())
+    has_overrides = any(
+        v is not None
+        for v in (ctx.n_action_steps, ctx.async_replan, ctx.replan_threshold, ctx.low_pass_alpha, ctx.freespace_scale)
+    )
+    if not has_recipe and not has_overrides:
+        return policy
+    base_recipe = load_recipe(ctx.recipe) if has_recipe else RecipeConfig(
+        name="cli",
+        n_action_steps=None,
+        async_replan=False,
+        low_pass_alpha=0.0,
+        freespace_scale=1.0,
+    )
+    recipe = merge_recipe_with_ctx(
+        base_recipe,
+        n_action_steps=ctx.n_action_steps,
+        async_replan=ctx.async_replan,
+        replan_threshold=ctx.replan_threshold,
+        low_pass_alpha=ctx.low_pass_alpha,
+        freespace_scale=ctx.freespace_scale,
+        checkpoint=ctx.checkpoint,
+    )
+    return apply_inference_recipe(policy, recipe)
 
 
 def train_algorithm(ctx: TrainContext) -> Any:

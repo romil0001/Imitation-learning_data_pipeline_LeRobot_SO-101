@@ -31,10 +31,16 @@ def run_record_loop(
     num_episodes: int | None = None,
     depth_source: Any | None = None,
     depth_camera_name: str = "wrist",
+    depth_camera_names: list[str] | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> int:
     """Record until num_episodes are saved (or until q). Returns saved count."""
     names = list(camera_names) if camera_names else [str(camera_name)]
+    depth_names = list(depth_camera_names) if depth_camera_names else (
+        list(dataset.meta.depth_names()) if dataset.meta.use_depth else []
+    )
+    if not depth_names and dataset.meta.use_depth:
+        depth_names = [depth_camera_name]
     saved = 0
     phase = "record"
     index = dataset.next_episode_index()
@@ -46,23 +52,27 @@ def run_record_loop(
         obs = follower.get_observation()
         action = leader.get_action()
         sent = follower.send_action(action)
-        depth_u16 = None
+        depths: dict[str, np.ndarray] | None = None
         if dataset.meta.use_depth and depth_source is not None:
-            depth_u16 = depth_source.latest_depth(depth_camera_name)
-            if depth_u16 is None and phase == "record":
-                depth_u16 = depth_source.wait_for_depth(depth_camera_name, timeout_s=2.0)
+            depths = {}
+            for dname in depth_names:
+                z = depth_source.latest_depth(dname)
+                if z is None and phase == "record":
+                    z = depth_source.wait_for_depth(dname, timeout_s=2.0)
+                if z is not None:
+                    depths[dname] = z
         if phase == "record":
             if dataset.meta.use_depth:
                 if depth_source is None:
                     raise RuntimeError("depth_source required when recording with use_depth")
-                if depth_u16 is None:
-                    raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
+                if depths is None or any(n not in depths for n in depth_names):
+                    raise RuntimeError(f"No depth frame yet for {depth_names!r}")
             writer.add_frame(
                 state=qpos_from_obs(obs),
                 action=qpos_from_obs(sent if sent is not None else action),
                 timestamp=time.time(),
                 images={name: rgb_from_obs(obs, name) for name in names},
-                depth_u16=depth_u16,
+                depths=depths,
             )
             from so101.live_viz import publish_live_joints
 
@@ -119,7 +129,10 @@ def record_from_env(
     cam0 = cameras[0]
     names = [c.name for c in cameras]
     use_depth = cam0.use_depth and cam0.backend == "zmq"
-    depth_name = cam0.name if use_depth else "wrist"
+    depth_names = [n for n in names if n in {"wrist", "base"}] if use_depth else []
+    if use_depth and not depth_names:
+        depth_names = [names[0]]
+    depth_name = depth_names[0] if depth_names else "wrist"
     root = project_root() / "data" / "datasets" / dataset_name
     fresh_meta = DatasetMeta(
         name=dataset_name,
@@ -133,6 +146,7 @@ def record_from_env(
         episode_count=0,
         use_depth=use_depth,
         depth_camera_name=depth_name,
+        depth_camera_names=tuple(depth_names),
     )
     if (root / "meta.json").is_file():
         dataset = SO101Dataset(root)
@@ -149,6 +163,7 @@ def record_from_env(
                 )
             use_depth = dataset.meta.use_depth
             depth_name = dataset.meta.depth_camera_name
+            depth_names = list(dataset.meta.depth_names())
             names = stored
             print(f"Resuming {root} with {dataset.meta.episode_count} episodes", flush=True)
     else:
@@ -158,11 +173,18 @@ def record_from_env(
         print(f"Already have {dataset.meta.episode_count} episodes (target {num_episodes})")
         return 0
 
-    print("BOTH ARMS: follower + leader USB and 12V ON. Omen publisher must be running.")
+    if ports.follower_is_remote:
+        print(
+            "REMOTE FOLLOWER: leader USB on Mac; follower USB+12V on Omen "
+            f"({ports.robot_host}:{ports.robot_state_port}/{ports.robot_cmd_port})."
+        )
+        print("Omen must run publish_d405.py AND robot_bridge.py.")
+    else:
+        print("BOTH ARMS: follower + leader USB and 12V ON. Omen publisher must be running.")
     print(f"Dataset {root}  this_run={remaining}  target={num_episodes}  task={task!r}")
     print(f"Cameras: {', '.join(names)}  {cam0.width}x{cam0.height}@{cam0.fps}")
     if use_depth:
-        print(f"Depth: {depth_name} uint16 from ZMQ (Omen publisher must not use --no-depth)")
+        print(f"Depth: {depth_names} uint16 from ZMQ (Omen publisher must not use --no-depth)")
     print("Live preview: dashboard http://127.0.0.1:8080  (cameras, depth, joint graphs)", flush=True)
     if confirm:
         input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
@@ -176,8 +198,9 @@ def record_from_env(
         from so101.zmq_rgbd import LatestZMQRGBD
 
         depth_source = LatestZMQRGBD(cam0.zmq_host, cam0.zmq_port)
-        print(f"Waiting for wrist depth from {cam0.zmq_host}:{cam0.zmq_port} ...", flush=True)
-        depth_source.wait_for_depth(depth_name, timeout_s=20.0)
+        for dname in depth_names:
+            print(f"Waiting for depth {dname!r} from {cam0.zmq_host}:{cam0.zmq_port} ...", flush=True)
+            depth_source.wait_for_depth(dname, timeout_s=20.0)
         print("Depth stream OK", flush=True)
     try:
         with StdinKeys() as keys:
@@ -191,6 +214,7 @@ def record_from_env(
                 num_episodes=remaining,
                 depth_source=depth_source,
                 depth_camera_name=depth_name,
+                depth_camera_names=depth_names,
             )
     finally:
         if depth_source is not None:

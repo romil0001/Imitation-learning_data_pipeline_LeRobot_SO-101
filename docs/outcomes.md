@@ -157,6 +157,7 @@ score, unless you add ablation conditions to the protocol YAML.
 | Method | Observations | Contact phase | Metric |
 |--------|--------------|---------------|--------|
 | ACT | RGB (+ depth optional) | learned end-to-end | `pc_success`, `by_condition` |
+| ACT + HG-DAgger | RGB (+ depth); correction episodes | learned end-to-end | same; report Δ vs ACT via `compare-eval` |
 | SmolVLA | RGB + language | learned end-to-end | same |
 | Hybrid (SmolVLA + depth) | RGB + language; depth at grasp only | analytic depth controller | same |
 | Hybrid (ACT + depth) | RGB + depth; depth at grasp only | analytic depth controller | same |

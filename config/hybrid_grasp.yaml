@@ -15,6 +15,23 @@ joint_signs:
   elbow_flex: 1.0
 max_delta_deg: 4.0
 close_gripper: true
-# Set from demos (closed gripper value in your recordings).
-gripper_closed: 15.0
-hold_close_frames: 8
+# From demos: closed gripper sits near ~1 (not 15).
+gripper_closed: 2.0
+hold_close_frames: 12
+# Nearest-depth blob tracking: steer shoulder_pan so the closest cluster
+# stays near image center while approaching / grasping.
+track_enabled: true
+track_roi_frac: 0.7
+track_band_mm: 40.0
+gain_deg_per_norm: 8.0
+lateral_joints: [shoulder_pan]
+lateral_signs:
+  # If the arm pans the wrong way, flip to -1.0.
+  shoulder_pan: 1.0
+# Grasp detect: jaw stall OR depth still near target (keys are thin → small residual).
+detect_grasp: true
+stall_gap: 2.5
+gripper_open: 55.0
+retry_on_miss: 1
+depth_confirm: true
+depth_confirm_tol_mm: 40.0

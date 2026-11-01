@@ -1,13 +1,17 @@
-"""Publish D405 wrist RGB + USB webcam overhead over ZMQ for the Mac.
+"""Publish wrist D405 + optional base D405 + USB overhead over ZMQ for the Mac.
 
-LeRobot on the Mac subscribes with type=zmq. Message shape:
-  {"images": {"wrist": "<base64 JPEG>", "overhead": "<base64 JPEG>"},
-   "depths": {"wrist": "<base64 uint16 PNG>"}}
+LeRobot / so101 on the Mac subscribes with type=zmq. Message shape:
+  {"images": {"wrist": "<JPEG b64>", "overhead": "...", "base": "..."},
+   "depths": {"wrist": "<uint16 PNG b64>", "base": "..."}}
 
 Usage (Anaconda Prompt on the Omen):
   conda activate omen-d405
+  python omen/publish_d405.py --list-realsense
   python omen/publish_d405.py --list-webcams
+  # single D405 (legacy):
   python omen/publish_d405.py --webcam-index 2
+  # dual D405 + overhead:
+  python omen/publish_d405.py --wrist-serial <S1> --base-serial <S2> --webcam-index 2
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ import base64
 import json
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -26,24 +31,28 @@ import zmq
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="D405 wrist + USB webcam overhead → ZMQ JPEG (Omen)")
+    p = argparse.ArgumentParser(description="D405 wrist (+ base) + USB overhead → ZMQ")
     p.add_argument("--bind", default="0.0.0.0", help="Bind address")
     p.add_argument("--port", type=int, default=5555, help="ZMQ PUB port")
     p.add_argument("--width", type=int, default=640)
     p.add_argument("--height", type=int, default=480)
     p.add_argument("--fps", type=int, default=15)
     p.add_argument("--jpeg-quality", type=int, default=70)
-    p.add_argument("--camera-name", default="wrist", help="D405 key in images{}")
+    p.add_argument("--camera-name", default="wrist", help="Primary D405 key in images{}")
+    p.add_argument("--base-name", default="base", help="Second D405 key when --base-serial set")
     p.add_argument("--overhead-name", default="overhead", help="Webcam key in images{}")
     p.add_argument(
         "--webcam-index",
         type=int,
         default=-1,
-        help="OpenCV index for USB overhead cam (-1 = auto-pick highest-res non-laptop)",
+        help="OpenCV index for USB overhead cam (-1 = auto-pick)",
     )
     p.add_argument("--no-overhead", action="store_true", help="Publish D405 only")
     p.add_argument("--list-webcams", action="store_true", help="Print OpenCV camera indices and exit")
-    p.add_argument("--serial", default="", help="D405 serial; empty = first device")
+    p.add_argument("--list-realsense", action="store_true", help="Print RealSense serials and exit")
+    p.add_argument("--serial", default="", help="Legacy alias for --wrist-serial")
+    p.add_argument("--wrist-serial", default="", help="Wrist D405 serial; empty = first device")
+    p.add_argument("--base-serial", default="", help="Base D405 serial (enables second depth cam)")
     p.add_argument("--no-depth", action="store_true", help="RGB only (saves RAM)")
     p.add_argument(
         "--dump-dir",
@@ -73,6 +82,16 @@ def list_webcams(max_index: int = 8) -> list[tuple[int, int, int]]:
     return found
 
 
+def list_realsense() -> list[tuple[str, str]]:
+    ctx = rs.context()
+    out: list[tuple[str, str]] = []
+    for dev in ctx.query_devices():
+        serial = dev.get_info(rs.camera_info.serial_number)
+        name = dev.get_info(rs.camera_info.name)
+        out.append((serial, name))
+    return out
+
+
 def _webcam_hint(width: int, height: int) -> str:
     if width == 1280 and height == 720:
         return "likely laptop built-in (HP Wide Vision)"
@@ -84,20 +103,15 @@ def _webcam_hint(width: int, height: int) -> str:
 
 
 def resolve_webcam_index(explicit: int) -> int:
-    """Pick overhead USB cam. Index 1 is often empty on Windows; XWF-1080P is often index 2."""
     if explicit >= 0:
         return explicit
     found = list_webcams()
     if not found:
         raise RuntimeError("No OpenCV webcams found")
-    # Drop typical laptop preview (1280x720) and low-res D405 duplicate (640x480).
     usb = [(i, w, h) for i, w, h in found if (w, h) not in {(1280, 720), (640, 480)}]
     pool = usb or found
     index, width, height = max(pool, key=lambda row: row[1] * row[2])
-    print(
-        f"Auto-picked overhead webcam index={index} ({width}x{height})",
-        flush=True,
-    )
+    print(f"Auto-picked overhead webcam index={index} ({width}x{height})", flush=True)
     return index
 
 
@@ -126,6 +140,54 @@ def jpeg_b64(bgr: np.ndarray, quality: int) -> str:
     return base64.b64encode(buf.tobytes()).decode("ascii")
 
 
+@dataclass
+class D405Stream:
+    name: str
+    serial: str
+    pipeline: rs.pipeline
+    align: rs.align | None
+
+
+def start_d405(
+    name: str,
+    serial: str,
+    width: int,
+    height: int,
+    fps: int,
+    *,
+    with_depth: bool,
+) -> D405Stream:
+    pipeline = rs.pipeline()
+    cfg = rs.config()
+    if serial:
+        cfg.enable_device(serial)
+    cfg.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
+    if with_depth:
+        cfg.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
+    profile = pipeline.start(cfg)
+    device = profile.get_device()
+    got = device.get_info(rs.camera_info.serial_number)
+    print(f"D405 {name!r} serial={got} depth={'on' if with_depth else 'off'}", flush=True)
+    align = rs.align(rs.stream.color) if with_depth else None
+    return D405Stream(name=name, serial=got, pipeline=pipeline, align=align)
+
+
+def grab_d405(stream: D405Stream) -> tuple[np.ndarray, np.ndarray | None]:
+    frames = stream.pipeline.wait_for_frames(timeout_ms=5000)
+    if stream.align is not None:
+        frames = stream.align.process(frames)
+    color = frames.get_color_frame()
+    if not color:
+        raise RuntimeError(f"No color frame from {stream.name}")
+    bgr = np.asanyarray(color.get_data())
+    depth_u16 = None
+    if stream.align is not None:
+        depth = frames.get_depth_frame()
+        if depth:
+            depth_u16 = np.asanyarray(depth.get_data())
+    return bgr, depth_u16
+
+
 def main() -> int:
     args = parse_args()
     if args.list_webcams:
@@ -145,29 +207,63 @@ def main() -> int:
             pass
         return 0
 
+    if args.list_realsense:
+        devices = list_realsense()
+        if not devices:
+            print("No RealSense devices. Plug D405(s) into USB 3.", file=sys.stderr)
+            return 1
+        print("RealSense devices (pass --wrist-serial / --base-serial):")
+        for serial, name in devices:
+            print(f"  {serial}  {name}")
+        return 0
+
     dump = Path(args.dump_dir) if args.dump_dir else None
     if dump:
         dump.mkdir(parents=True, exist_ok=True)
 
-    pipeline = rs.pipeline()
-    cfg = rs.config()
-    if args.serial:
-        cfg.enable_device(args.serial)
-    cfg.enable_stream(rs.stream.color, args.width, args.height, rs.format.bgr8, args.fps)
-    if not args.no_depth:
-        cfg.enable_stream(rs.stream.depth, args.width, args.height, rs.format.z16, args.fps)
+    wrist_serial = (args.wrist_serial or args.serial or "").strip()
+    base_serial = (args.base_serial or "").strip()
+    with_depth = not args.no_depth
 
-    print(f"Starting D405 pipeline {args.width}x{args.height}@{args.fps} …", flush=True)
+    streams: list[D405Stream] = []
     try:
-        profile = pipeline.start(cfg)
+        streams.append(
+            start_d405(
+                args.camera_name,
+                wrist_serial,
+                args.width,
+                args.height,
+                args.fps,
+                with_depth=with_depth,
+            )
+        )
+        if base_serial:
+            if not wrist_serial:
+                print(
+                    "Warning: --base-serial set without --wrist-serial; "
+                    "pin both serials so wrist/base do not swap after replug.",
+                    flush=True,
+                )
+            streams.append(
+                start_d405(
+                    args.base_name,
+                    base_serial,
+                    args.width,
+                    args.height,
+                    args.fps,
+                    with_depth=with_depth,
+                )
+            )
     except Exception as e:
+        for s in streams:
+            try:
+                s.pipeline.stop()
+            except Exception:
+                pass
         print("Failed to start RealSense pipeline:", e, file=sys.stderr)
         print("Plug D405 into USB 3, close RealSense Viewer, then retry.", file=sys.stderr)
+        print("List devices: python omen\\publish_d405.py --list-realsense", file=sys.stderr)
         return 1
-
-    device = profile.get_device()
-    serial = device.get_info(rs.camera_info.serial_number)
-    print(f"Device serial: {serial}  name={args.camera_name}", flush=True)
 
     webcam = None
     webcam_index = -1
@@ -176,29 +272,23 @@ def main() -> int:
             webcam_index = resolve_webcam_index(args.webcam_index)
             webcam = open_webcam(webcam_index, args.width, args.height, args.fps)
         except Exception as e:
-            pipeline.stop()
+            for s in streams:
+                s.pipeline.stop()
             label = args.webcam_index if args.webcam_index >= 0 else "auto"
             print(f"Failed to open overhead webcam ({label}): {e}", file=sys.stderr)
             print("Run: python omen\\publish_d405.py --list-webcams", file=sys.stderr)
-            print("Then: python omen\\publish_d405.py --webcam-index N  (XWF-1080P is often 2)", file=sys.stderr)
             return 1
-        print(
-            f"Overhead webcam index={webcam_index}  name={args.overhead_name}",
-            flush=True,
-        )
-
-    align = rs.align(rs.stream.color) if not args.no_depth else None
-    if args.no_depth:
-        print("D405 depth: off (--no-depth)", flush=True)
-    else:
-        print(f"D405 depth: on (ZMQ depths[{args.camera_name!r}], aligned to color)", flush=True)
+        print(f"Overhead webcam index={webcam_index}  name={args.overhead_name}", flush=True)
 
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.PUB)
     sock.bind(f"tcp://{args.bind}:{args.port}")
-    keys = [args.camera_name] + ([] if webcam is None else [args.overhead_name])
-    print(f"ZMQ PUB tcp://{args.bind}:{args.port}  cameras={keys}", flush=True)
-    print("On the Mac, set ZMQ_HOST to this PC's LAN IP and CAMERA_NAMES=wrist,overhead.", flush=True)
+    cam_keys = [s.name for s in streams] + ([] if webcam is None else [args.overhead_name])
+    print(f"ZMQ PUB tcp://{args.bind}:{args.port}  cameras={cam_keys}", flush=True)
+    print(
+        "On the Mac set CAMERA_NAMES=" + ",".join(cam_keys) + " and ZMQ_HOST to this PC's LAN IP.",
+        flush=True,
+    )
 
     last_web: np.ndarray | None = None
     frame_i = 0
@@ -206,20 +296,13 @@ def main() -> int:
     n = 0
     try:
         while True:
-            frames = pipeline.wait_for_frames()
-            if align is not None:
-                frames = align.process(frames)
-            color = frames.get_color_frame()
-            if not color:
-                continue
-            wrist_bgr = np.asanyarray(color.get_data())
-            images = {args.camera_name: jpeg_b64(wrist_bgr, args.jpeg_quality)}
+            images: dict[str, str] = {}
             depths: dict[str, str] = {}
-            if not args.no_depth:
-                depth = frames.get_depth_frame()
-                if depth:
-                    z = np.asanyarray(depth.get_data())
-                    depths[args.camera_name] = depth_png_b64(z)
+            for stream in streams:
+                bgr, depth_u16 = grab_d405(stream)
+                images[stream.name] = jpeg_b64(bgr, args.jpeg_quality)
+                if depth_u16 is not None:
+                    depths[stream.name] = depth_png_b64(depth_u16)
             if webcam is not None:
                 ok, web_bgr = webcam.read()
                 if ok and web_bgr is not None:
@@ -235,27 +318,28 @@ def main() -> int:
             sock.send_string(json.dumps(payload))
 
             if dump and frame_i % max(1, args.dump_every) == 0:
-                wrist_jpg = base64.b64decode(images[args.camera_name])
-                (dump / f"rgb_{frame_i:06d}.jpg").write_bytes(wrist_jpg)
-                if args.overhead_name in images:
-                    over_jpg = base64.b64decode(images[args.overhead_name])
-                    (dump / f"overhead_{frame_i:06d}.jpg").write_bytes(over_jpg)
-                if depths:
-                    raw = base64.b64decode(depths[args.camera_name])
+                for name, b64 in images.items():
+                    (dump / f"{name}_{frame_i:06d}.jpg").write_bytes(base64.b64decode(b64))
+                for name, b64 in depths.items():
+                    raw = base64.b64decode(b64)
                     z = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
                     if z is not None:
-                        cv2.imwrite(str(dump / f"depth_{frame_i:06d}.png"), z)
+                        cv2.imwrite(str(dump / f"{name}_depth_{frame_i:06d}.png"), z)
 
             frame_i += 1
             n += 1
             if n % 30 == 0:
                 dt = time.time() - t0
-                keys = list(images) + (["depth:" + args.camera_name] if depths else [])
+                keys = list(images) + [f"depth:{k}" for k in depths]
                 print(f"published {n} frames ({n / max(dt, 1e-3):.1f} fps) keys={keys}", flush=True)
     except KeyboardInterrupt:
         print("\nStopped.", flush=True)
     finally:
-        pipeline.stop()
+        for s in streams:
+            try:
+                s.pipeline.stop()
+            except Exception:
+                pass
         if webcam is not None:
             webcam.release()
         sock.close(0)

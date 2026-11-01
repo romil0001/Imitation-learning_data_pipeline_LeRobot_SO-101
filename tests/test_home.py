@@ -9,7 +9,7 @@ import numpy as np
 from so101.dataset import JOINT_NAMES, DatasetMeta, EpisodeWriter, SO101Dataset
 from so101.eval_protocol import load_protocol, run_protocol
 from so101.hardware import qpos_from_obs
-from so101.home import interpolate_to_qpos, mean_start_qpos
+from so101.home import interpolate_to_qpos, mean_start_qpos, safe_power_down
 
 
 class FakeFollower:
@@ -54,6 +54,18 @@ def test_interpolate_to_qpos_reaches_target() -> None:
     assert len(follower.sent) == 4
     np.testing.assert_allclose(follower.sent[0], start + (home - start) / 4, atol=1e-5)
     np.testing.assert_allclose(follower.sent[-1], home, atol=1e-5)
+
+
+def test_safe_power_down_parks_at_home() -> None:
+    start = np.array([10.0, 20.0, 0.0, 0.0, 0.0, 40.0], dtype=np.float32)
+    home = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 10.0], dtype=np.float32)
+    follower = FakeFollower(start)
+    safe_power_down(follower, home, n_steps=5, dt=0.0, hold_s=0.0, sleep=lambda _s: None)
+    np.testing.assert_allclose(follower.sent[-1], home, atol=1e-5)
+
+
+def test_safe_power_down_none_follower_noop() -> None:
+    safe_power_down(None, np.zeros(6, dtype=np.float32), sleep=lambda _s: None)
 
 
 def test_mean_start_qpos_averages_first_states(tmp_path: Path) -> None:

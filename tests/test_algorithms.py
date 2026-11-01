@@ -62,6 +62,7 @@ def test_catalog_splits_setup_and_ml() -> None:
     for name in (
         "find-port",
         "record",
+        "dagger",
         "replay",
         "home",
         "depth-grasp",
@@ -69,7 +70,7 @@ def test_catalog_splits_setup_and_ml() -> None:
         "protocol",
     ):
         assert name in setup
-    for name in ("act", "act-jax", "smolvla"):
+    for name in ("act", "act-jax", "smolvla", "gemfuse"):
         assert name in ml
     assert get("hybrid").load is not None
     assert get("depth-grasp").load is None

@@ -18,7 +18,8 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 | Calibrate follower | ON | OFF |
 | Calibrate leader | OFF | ON |
 | Teleoperate / record | ON | ON |
-| Train ACT | OFF (no robot) | OFF |
+| HG-DAgger corrections | ON | ON |
+| Train ACT / DAgger fine-tune | OFF (no robot) | OFF |
 | Eval ACT | ON | OFF |
 
 ## Two machines
@@ -50,3 +51,4 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 3. Mac: `bash scripts/08_record.sh` (~50 episodes for ACT; same cameras/task; data in `data/datasets/`)
 4. Mac: `bash scripts/10_train_act.sh` (MPS, hours — not the Omen; holds out episodes, writes `best_val`; depth used automatically if recorded; optional `--backend jax`)
 5. Mac: follower + Omen publisher → `bash scripts/11_eval_act.sh` (loads `best_val`; wrist depth fed to policy when trained with depth; scored pen-to-keys grid; reset scene, then **y**/**n** each trial; train loss is not the score; logs in `outputs/eval/`)
+6. Optional HG-DAgger: both arms + Omen → `bash scripts/18_dagger.sh` (**p** pause/sync, **c** record correction, **n** save) → `bash scripts/19_train_dagger.sh` → re-eval with `POLICY_PATH=outputs/train/act_so101_d405_demo_dagger` → `python -m so101 compare-eval`

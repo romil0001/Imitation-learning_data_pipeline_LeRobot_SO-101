@@ -72,6 +72,16 @@ def builtin_algorithms() -> list[Algorithm]:
             module="so101.record",
         ),
         Algorithm(
+            name="dagger",
+            family="setup",
+            summary=(
+                "Human-gated DAgger: policy drives until p; leader syncs to follower; "
+                "c records only correction frames."
+            ),
+            run="bash scripts/18_dagger.sh",
+            module="so101.dagger",
+        ),
+        Algorithm(
             name="replay",
             family="setup",
             summary="Play one episode's action.npy open-loop on the follower.",
@@ -122,9 +132,14 @@ def builtin_algorithms() -> list[Algorithm]:
         Algorithm(
             name="act",
             family="ml",
-            summary="Action Chunking Transformer, PyTorch ResNet18, chunks of 100. Uses wrist depth when the dataset has it.",
+            summary=(
+                "Action Chunking Transformer, PyTorch ResNet18, chunks of 100. "
+                "Uses wrist depth when the dataset has it. Supports HG-DAgger fine-tune "
+                "via --corrections / --init-checkpoint."
+            ),
             run=(
                 "train: python -m so101 train --algo act\n"
+                "dagger: bash scripts/18_dagger.sh && bash scripts/19_train_dagger.sh\n"
                 "eval:  python -m so101 eval --policy act"
             ),
             module="so101.models.act",

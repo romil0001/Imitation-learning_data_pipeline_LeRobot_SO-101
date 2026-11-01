@@ -56,28 +56,54 @@ load_ports() {
   FOLLOWER_I="${FOLLOWER_I:-0}"
   FOLLOWER_D="${FOLLOWER_D:-48}"
   FOLLOWER_BUS_RETRIES="${FOLLOWER_BUS_RETRIES:-8}"
+  FOLLOWER_BACKEND="${FOLLOWER_BACKEND:-local}"
+  ROBOT_STATE_PORT="${ROBOT_STATE_PORT:-5556}"
+  ROBOT_CMD_PORT="${ROBOT_CMD_PORT:-5557}"
   FOLLOWER_PID_ARGS=(
     --robot.position_p_coefficient="$FOLLOWER_P"
     --robot.position_i_coefficient="$FOLLOWER_I"
     --robot.position_d_coefficient="$FOLLOWER_D"
     --robot.num_read_retries="$FOLLOWER_BUS_RETRIES"
   )
-  if [[ -z "${FOLLOWER_PORT:-}" || -z "${LEADER_PORT:-}" ]]; then
-    echo "FOLLOWER_PORT and LEADER_PORT must both be set in $ports" >&2
+  if [[ -z "${LEADER_PORT:-}" ]]; then
+    echo "LEADER_PORT must be set in $ports" >&2
     return 1
   fi
-  if [[ "$FOLLOWER_PORT" == CHANGE_ME* || "$LEADER_PORT" == CHANGE_ME* ]]; then
+  if [[ "$LEADER_PORT" == CHANGE_ME* ]]; then
     echo "Replace CHANGE_ME_* placeholders in $ports" >&2
     return 1
   fi
-  if [[ "$FOLLOWER_PORT" == "$LEADER_PORT" ]]; then
-    echo "FOLLOWER_PORT and LEADER_PORT must be different devices (got $FOLLOWER_PORT)" >&2
-    return 1
+  if [[ "$FOLLOWER_BACKEND" == "remote" || "$FOLLOWER_BACKEND" == "zmq" || "$FOLLOWER_BACKEND" == "network" ]]; then
+    if [[ -z "${ROBOT_HOST:-}" || "$ROBOT_HOST" == CHANGE_ME* ]]; then
+      ROBOT_HOST="${ZMQ_HOST:-}"
+    fi
+    if [[ -z "${ROBOT_HOST:-}" || "$ROBOT_HOST" == CHANGE_ME* ]]; then
+      echo "Remote follower needs ROBOT_HOST in ports.env (or ZMQ_HOST in camera.env)" >&2
+      return 1
+    fi
+    FOLLOWER_PORT="${FOLLOWER_PORT:-remote}"
+  else
+    if [[ -z "${FOLLOWER_PORT:-}" ]]; then
+      echo "FOLLOWER_PORT must be set in $ports" >&2
+      return 1
+    fi
+    if [[ "$FOLLOWER_PORT" == CHANGE_ME* ]]; then
+      echo "Replace CHANGE_ME_* placeholders in $ports" >&2
+      return 1
+    fi
+    if [[ "$FOLLOWER_PORT" == "$LEADER_PORT" ]]; then
+      echo "FOLLOWER_PORT and LEADER_PORT must be different devices (got $FOLLOWER_PORT)" >&2
+      return 1
+    fi
   fi
   return 0
 }
 
 require_follower_port_exists() {
+  if [[ "${FOLLOWER_BACKEND:-local}" == "remote" || "${FOLLOWER_BACKEND:-local}" == "zmq" || "${FOLLOWER_BACKEND:-local}" == "network" ]]; then
+    echo "Follower backend=remote  host=${ROBOT_HOST:-?}  state=${ROBOT_STATE_PORT:-5556}  cmd=${ROBOT_CMD_PORT:-5557}"
+    return 0
+  fi
   if [[ ! -e "$FOLLOWER_PORT" ]]; then
     echo "FOLLOWER_PORT '$FOLLOWER_PORT' does not exist — is the follower connected? Re-run scripts/01_find_port.sh if the device path changed." >&2
     return 1

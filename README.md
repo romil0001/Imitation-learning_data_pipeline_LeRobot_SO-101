@@ -3,8 +3,9 @@
 **Author:** [romil0001](https://github.com/romil0001) · **License:** [MIT](LICENSE)
 
 > A research platform for bimanual SO-101 manipulation: leader–follower teleoperation,
-> multi-view RGB and metric wrist depth, imitation learning (ACT, SmolVLA), depth-assisted
-> hybrid grasping, and protocol-based evaluation with per-condition success rates.
+> multi-view RGB and metric wrist depth, imitation learning (ACT, SmolVLA), human-gated
+> DAgger, depth-assisted hybrid grasping, and protocol-based evaluation with per-condition
+> success rates.
 
 ## Abstract
 
@@ -12,10 +13,11 @@ We study visuomotor manipulation on a low-cost SO-101 dual-arm cell with a
 **distributed sensing architecture** (Mac control + Windows depth/RGB publisher).
 Human demonstrations are collected via leader teleoperation and stored in a local
 episode format with synchronized proprioception and video. Policies are trained
-offline (ACT with optional depth; SmolVLA with language) and evaluated in closed
-loop under a **fixed YAML protocol** with binary success labels and condition
-strata. A hybrid controller delegates contact-phase height correction to metric
-wrist depth while leaving approach and place to the base policy.
+offline (ACT with optional depth; SmolVLA with language), optionally refined with
+**human-gated DAgger**, and evaluated in closed loop under a **fixed YAML protocol**
+with binary success labels and condition strata. A hybrid controller delegates
+contact-phase height correction to metric wrist depth while leaving approach and
+place to the base policy.
 
 ## Research contributions
 
@@ -26,7 +28,9 @@ wrist depth while leaving approach and place to the base policy.
 3. **Protocol-based outcomes** — repeated trials per scene condition with binary
    success labels; reports `pc_success` and per-condition breakdown instead of
    train loss.
-4. **Hybrid depth grasp** — decouple VLA approach from analytic contact control.
+4. **HG-DAgger** — expert corrections on policy-visited states; fine-tune without
+   overwriting the baseline checkpoint; `compare-eval` for Δ`pc_success`.
+5. **Hybrid depth grasp** — decouple VLA approach from analytic contact control.
 
 ## Visualizations
 
@@ -84,6 +88,9 @@ Full outcome flow, policy comparison, and eval protocol diagrams:
 flowchart LR
   DEMO[Demonstrations] --> TRAIN[Policy training]
   TRAIN --> EVAL[Protocol eval]
+  EVAL --> DAGGER[HG-DAgger corrections]
+  DAGGER --> FT[Fine-tune]
+  FT --> EVAL2[Re-score + compare-eval]
   EVAL --> PC[pc_success]
   EVAL --> BC[by_condition]
 ```
@@ -98,6 +105,10 @@ bash env/setup_env.sh
 bash scripts/08_record.sh
 bash scripts/10_train_act.sh
 bash scripts/11_eval_act.sh   # → outputs/eval/.../summary.json
+# optional interactive imitation:
+bash scripts/18_dagger.sh
+bash scripts/19_train_dagger.sh
+POLICY_PATH=outputs/train/act_so101_d405_demo_dagger bash scripts/11_eval_act.sh
 ```
 
 Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/reproduction.md).

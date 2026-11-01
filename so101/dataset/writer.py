@@ -13,15 +13,25 @@ from so101.dataset.video import write_mp4
 
 
 class EpisodeWriter:
-    def __init__(self, dataset: SO101Dataset, index: int) -> None:
+    def __init__(
+        self,
+        dataset: SO101Dataset,
+        index: int,
+        *,
+        source: str = "teleop",
+        intervention: bool = False,
+    ) -> None:
         self.dataset = dataset
         self.index = index
+        self.source = source
+        self.intervention = intervention
         self._names = self.dataset.meta.names()
+        self._depth_names = self.dataset.meta.depth_names()
         self._states: list[np.ndarray] = []
         self._actions: list[np.ndarray] = []
         self._timestamps: list[float] = []
         self._frames: dict[str, list[np.ndarray]] = {name: [] for name in self._names}
-        self._depth_frames: list[np.ndarray] = []
+        self._depth_frames: dict[str, list[np.ndarray]] = {name: [] for name in self._depth_names}
         self._aborted = False
         self._saved = False
 
@@ -33,6 +43,7 @@ class EpisodeWriter:
         image_rgb: np.ndarray | None = None,
         images: dict[str, np.ndarray] | None = None,
         depth_u16: np.ndarray | None = None,
+        depths: dict[str, np.ndarray] | None = None,
     ) -> None:
         if self._aborted or self._saved:
             raise RuntimeError("Cannot add frames after save/abort")
@@ -66,17 +77,29 @@ class EpisodeWriter:
         self._timestamps.append(float(timestamp))
         for name, img in checked.items():
             self._frames[name].append(img)
-        if self.dataset.meta.use_depth:
-            if depth_u16 is None:
-                raise ValueError("depth_u16 required when dataset meta.use_depth is true")
-            z = np.asarray(depth_u16, dtype=np.uint16)
-            if z.shape[0] != meta.camera_height or z.shape[1] != meta.camera_width:
+
+        if self._depth_names:
+            if depths is None:
+                if depth_u16 is None:
+                    raise ValueError("depths= or depth_u16 required when dataset use_depth is true")
+                if len(self._depth_names) != 1:
+                    raise ValueError("multi-depth episode requires depths={name: u16, ...}")
+                depths = {self._depth_names[0]: depth_u16}
+            missing_d = [name for name in self._depth_names if name not in depths]
+            extra_d = [name for name in depths if name not in self._depth_frames]
+            if missing_d or extra_d:
                 raise ValueError(
-                    f"depth shape {z.shape[:2]} != {(meta.camera_height, meta.camera_width)}"
+                    f"depths keys {sorted(depths)} != depth cams {list(self._depth_names)}"
                 )
-            self._depth_frames.append(z.copy())
-        elif depth_u16 is not None:
-            raise ValueError("depth_u16 provided but dataset meta.use_depth is false")
+            for name in self._depth_names:
+                z = np.asarray(depths[name], dtype=np.uint16)
+                if z.shape[0] != meta.camera_height or z.shape[1] != meta.camera_width:
+                    raise ValueError(
+                        f"depth {name} shape {z.shape[:2]} != {(meta.camera_height, meta.camera_width)}"
+                    )
+                self._depth_frames[name].append(z.copy())
+        elif depth_u16 is not None or depths is not None:
+            raise ValueError("depth provided but dataset meta.use_depth is false")
 
     def save(self) -> Path:
         if self._aborted:
@@ -97,13 +120,21 @@ class EpisodeWriter:
         for name in self._names:
             write_mp4(folder / f"{name}.mp4", self._frames[name], self.dataset.meta.fps)
         depth_path: Path | None = None
-        if self.dataset.meta.use_depth:
-            if len(self._depth_frames) != len(first):
-                raise RuntimeError("depth frame count mismatch")
-            depth_name = self.dataset.meta.depth_camera_name
-            depth_path = folder / f"{depth_name}_depth.npy"
-            np.save(depth_path, np.stack(self._depth_frames, axis=0))
-        emeta = EpisodeMeta(index=self.index, num_frames=len(first), task=self.dataset.meta.task)
+        if self._depth_names:
+            for name in self._depth_names:
+                if len(self._depth_frames[name]) != len(first):
+                    raise RuntimeError(f"depth frame count mismatch for {name}")
+                path = folder / f"{name}_depth.npy"
+                np.save(path, np.stack(self._depth_frames[name], axis=0))
+            primary = self.dataset.meta.depth_camera_name
+            depth_path = folder / f"{primary}_depth.npy"
+        emeta = EpisodeMeta(
+            index=self.index,
+            num_frames=len(first),
+            task=self.dataset.meta.task,
+            source=self.source,
+            intervention=self.intervention,
+        )
         (folder / "episode.json").write_text(json.dumps(emeta.to_dict(), indent=2) + "\n")
         new_count = max(self.dataset.meta.episode_count, self.index + 1)
         self.dataset.meta = replace(self.dataset.meta, episode_count=new_count)
@@ -111,14 +142,24 @@ class EpisodeWriter:
         self._saved = True
         for frames in self._frames.values():
             frames.clear()
-        self._depth_frames.clear()
+        for frames in self._depth_frames.values():
+            frames.clear()
         return folder
+
+    @property
+    def num_frames(self) -> int:
+        return len(self._states)
+
+    @property
+    def is_saved(self) -> bool:
+        return self._saved
 
     def abort(self) -> None:
         self._aborted = True
         for frames in self._frames.values():
             frames.clear()
-        self._depth_frames.clear()
+        for frames in self._depth_frames.values():
+            frames.clear()
         folder = episode_dir(self.dataset.root, self.index)
         if folder.exists():
             shutil.rmtree(folder)

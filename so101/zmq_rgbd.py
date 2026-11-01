@@ -106,6 +106,29 @@ class LatestZMQRGBD:
             z = self._depths.get(name)
             return None if z is None else z.copy()
 
+    def latest_rgb(self, name: str) -> np.ndarray | None:
+        """Decode latest JPEG for ``name`` to RGB uint8, or None."""
+        with self._lock:
+            jpeg = self._jpegs.get(name)
+            if jpeg is None:
+                return None
+            raw = jpeg
+        arr = np.frombuffer(raw, dtype=np.uint8)
+        bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if bgr is None:
+            return None
+        return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+    def latest_images(self) -> dict[str, np.ndarray]:
+        with self._lock:
+            names = list(self._jpegs.keys())
+        out: dict[str, np.ndarray] = {}
+        for name in names:
+            rgb = self.latest_rgb(name)
+            if rgb is not None:
+                out[name] = rgb
+        return out
+
     def wait_for_depth(self, name: str, timeout_s: float = 15.0) -> np.ndarray:
         """Block until a depth frame for ``name`` arrives (or raise)."""
         deadline = time.monotonic() + timeout_s
