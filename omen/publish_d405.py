@@ -53,7 +53,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--serial", default="", help="Legacy alias for --wrist-serial")
     p.add_argument("--wrist-serial", default="", help="Wrist D405 serial; empty = first device")
     p.add_argument("--base-serial", default="", help="Base D405 serial (enables second depth cam)")
-    p.add_argument("--no-depth", action="store_true", help="RGB only (saves RAM)")
+    p.add_argument("--no-depth", action="store_true", help="RGB only on all D405s (saves RAM/USB)")
+    p.add_argument(
+        "--base-no-depth",
+        action="store_true",
+        help="RGB-only on base D405 (keeps wrist depth; helps dual-D405 USB bandwidth)",
+    )
     p.add_argument(
         "--dump-dir",
         default="",
@@ -244,6 +249,7 @@ def main() -> int:
                     "pin both serials so wrist/base do not swap after replug.",
                     flush=True,
                 )
+            base_depth = with_depth and not args.base_no_depth
             streams.append(
                 start_d405(
                     args.base_name,
@@ -251,7 +257,7 @@ def main() -> int:
                     args.width,
                     args.height,
                     args.fps,
-                    with_depth=with_depth,
+                    with_depth=base_depth,
                 )
             )
     except Exception as e:
