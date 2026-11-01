@@ -288,7 +288,24 @@ def main() -> int:
 
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.PUB)
-    sock.bind(f"tcp://{args.bind}:{args.port}")
+    try:
+        sock.bind(f"tcp://{args.bind}:{args.port}")
+    except zmq.ZMQError as e:
+        for s in streams:
+            try:
+                s.pipeline.stop()
+            except Exception:
+                pass
+        if webcam is not None:
+            webcam.release()
+        sock.close(0)
+        ctx.term()
+        print(
+            f"ZMQ bind failed ({e}). Port {args.port} is already in use — "
+            "stop the other publish_d405.py (or change --port) and retry.",
+            file=sys.stderr,
+        )
+        return 1
     cam_keys = [s.name for s in streams] + ([] if webcam is None else [args.overhead_name])
     print(f"ZMQ PUB tcp://{args.bind}:{args.port}  cameras={cam_keys}", flush=True)
     print(
