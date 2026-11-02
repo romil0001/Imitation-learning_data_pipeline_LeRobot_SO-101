@@ -1,6 +1,6 @@
-"""Mac operator site: D405 over ZMQ, arm ports, live logs. No ROS.
+"""Mac operator site: Local D405s + RGB USB Cameras, arm ports, live logs. No ROS.
 
-Architected by romil0001. See docs/architecture.md.
+Architected by romil0001 & Gemini Enterprise. See docs/architecture.md.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-
 import cv2
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -26,27 +25,27 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-
 def _zmq():
     import zmq
-
     return zmq
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
 STATIC = Path(__file__).resolve().parent / "static"
 SESSION_LOG = ROOT / "outputs" / "session.log"
 BANNER_RE = re.compile(r"===== (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (\S+) =====")
 
+# Config default state adjusted for SO-101 (Local multi-cam default)
 CFG: dict[str, str] = {
-    "backend": "zmq",
+    "backend": "opencv",  # Default to local capture if ZMQ isn't running
     "zmq_host": "",
     "zmq_port": "5555",
-    "camera_name": "wrist",
-    "camera_names": "wrist,overhead",
+    "camera_name": "d405_left",
+    "camera_names": "d405_left,d405_right,overview_rgb",
     "opencv_index": "0",
-    "width": "640",
+    "width": "848",       # Ideal resolution for D405 close-up tracking
     "height": "480",
     "fps": "15",
 }
@@ -56,7 +55,14 @@ _latest_jpegs: dict[str, bytes] = {}
 _frame_ts: dict[str, float] = {}
 _jpeg_lock = threading.Lock()
 _stop = threading.Event()
-# Tiles / MJPEG treat a stream as live only while frames stay this fresh.
+
+# Map camera local system indices to stream names
+LOCAL_CAMERA_MAP: dict[str, int] = {
+    "d405_left": 0,
+    "d405_right": 2,
+    "overview_rgb": 4
+}
+
 STALE_S = 2.0
 _stats = {
     "last_ts": 0.0,
@@ -66,7 +72,6 @@ _stats = {
     "stream_ids": [],
     "depth_ids": [],
 }
-
 
 def load_env_file(path: Path) -> dict[str, str]:
     out: dict[str, str] = {}
@@ -80,36 +85,35 @@ def load_env_file(path: Path) -> dict[str, str]:
         out[k.strip()] = v.strip().strip('"').strip("'")
     return out
 
-
 def camera_names_from_cfg() -> list[str]:
     return [n.strip() for n in CFG.get("camera_names", CFG["camera_name"]).split(",") if n.strip()]
 
-
 def depth_camera_names(rgb_names: list[str] | None = None) -> list[str]:
-    """D405 views that normally carry depth (wrist/base); fall back to first cam."""
     names = list(rgb_names or camera_names_from_cfg())
     if not CFG.get("use_depth"):
         return []
-    preferred = [n for n in names if n in {"wrist", "base"}]
+    # Both wrist cameras carry depth values
+    preferred = [n for n in names if n in {"d405_left", "d405_right", "wrist", "base"}]
     if preferred:
         return preferred
     return [names[0]] if names else []
 
-
 def apply_camera_env() -> None:
     env = load_env_file(Path(os.environ.get("CAMERA_FILE", ROOT / "config" / "camera.env")))
-    CFG["backend"] = env.get("CAMERA_BACKEND", "zmq")
+    CFG["backend"] = env.get("CAMERA_BACKEND", "opencv")
     CFG["zmq_host"] = env.get("ZMQ_HOST", "")
     CFG["zmq_port"] = env.get("ZMQ_PORT", "5555")
+    
     names = env.get("CAMERA_NAMES", "").strip()
     if names:
         CFG["camera_names"] = names
-        CFG["camera_name"] = names.split(",")[0].strip() or "wrist"
+        CFG["camera_name"] = names.split(",")[0].strip() or "d405_left"
     else:
-        CFG["camera_name"] = env.get("CAMERA_NAME", "front")
+        CFG["camera_name"] = env.get("CAMERA_NAME", "d405_left")
         CFG["camera_names"] = CFG["camera_name"]
+
     CFG["opencv_index"] = env.get("CAMERA_INDEX", "0")
-    CFG["width"] = env.get("CAMERA_WIDTH", "640")
+    CFG["width"] = env.get("CAMERA_WIDTH", "848")
     CFG["height"] = env.get("CAMERA_HEIGHT", "480")
     CFG["fps"] = env.get("CAMERA_FPS", "15")
     CFG["use_depth"] = env.get("CAMERA_USE_DEPTH", "false").strip().lower() in {
@@ -119,9 +123,7 @@ def apply_camera_env() -> None:
         "on",
     }
 
-
 def stream_catalog(live_ids: list[str] | None = None) -> list[dict]:
-    """RGB + depth tiles the UI should show (config order, plus any surprise live keys)."""
     rgb_names = camera_names_from_cfg()
     depth_names = depth_camera_names(rgb_names)
     live = set(live_ids or [])
@@ -143,17 +145,19 @@ def stream_catalog(live_ids: list[str] | None = None) -> list[dict]:
         )
 
     for name in rgb_names:
-        hint = "D405" if name in {"wrist", "base"} else ("USB" if name == "overhead" else "RGB")
+        hint = "D405 DepthCam" if "d405" in name else "Overview RGB"
         add(name, f"{name} · {hint}", "rgb")
+
     for name in depth_names:
         add(f"{name}_depth", f"{name} depth · Z16", "depth")
+
     for sid in sorted(live):
         if sid.endswith("_depth"):
             add(sid, sid.replace("_", " "), "depth")
         else:
             add(sid, sid, "rgb")
-    return out
 
+    return out
 
 def note_frame() -> None:
     now = time.time()
@@ -166,23 +170,19 @@ def note_frame() -> None:
     _stats["last_ts"] = now
     _stats["n"] += 1
 
-
 def frame_is_fresh(stream_id: str, max_age_s: float = STALE_S, now: float | None = None) -> bool:
     ts = _frame_ts.get(stream_id)
     if ts is None or ts <= 0:
         return False
     return ((now if now is not None else time.time()) - ts) <= max_age_s
 
-
 def fresh_stream_ids(max_age_s: float = STALE_S, now: float | None = None) -> list[str]:
     t = now if now is not None else time.time()
     return sorted(sid for sid, ts in _frame_ts.items() if ts > 0 and (t - ts) <= max_age_s)
 
-
 def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
     global _latest_jpeg
     from so101.zmq_rgbd import decode_depth_png_b64, depth_colormap_bgr
-
     zmq = _zmq()
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.SUB)
@@ -190,6 +190,7 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
     sock.setsockopt(zmq.CONFLATE, True)
     sock.setsockopt(zmq.RCVTIMEO, 2000)
     sock.connect(f"tcp://{host}:{port}")
+
     while not _stop.is_set():
         try:
             data = json.loads(sock.recv_string())
@@ -198,15 +199,18 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
         except Exception:
             time.sleep(0.2)
             continue
+
         images = data.get("images") or {}
         if not images:
             continue
+
         decoded: dict[str, bytes] = {}
         for name, b64 in images.items():
             try:
                 decoded[name] = base64.b64decode(b64)
             except Exception:
                 continue
+
         for name, b64 in (data.get("depths") or {}).items():
             try:
                 z = decode_depth_png_b64(b64)
@@ -217,10 +221,11 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
                     _stats["depth_ok"] = True
             except Exception:
                 continue
+
         if not decoded:
             continue
+
         preferred = decoded.get(camera_name) or next(iter(decoded.values()))
-        depth_ids = [k for k in decoded if k.endswith("_depth")]
         now = time.time()
         with _jpeg_lock:
             _latest_jpegs.update(decoded)
@@ -234,32 +239,35 @@ def jpeg_loop_zmq(host: str, port: int, camera_name: str) -> None:
             note_frame()
     sock.close(0)
 
-
-def jpeg_loop_opencv(index: int, width: int, height: int, fps: int) -> None:
+# Isolated capture worker to handle 3 camera devices concurrently without frame drop
+def local_camera_capture_worker(cam_id: str, index: int, width: int, height: int, fps: int) -> None:
     global _latest_jpeg
     cap = cv2.VideoCapture(index)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FPS, fps)
+    
     delay = 1.0 / max(fps, 1)
     while not _stop.is_set():
         ok, frame = cap.read()
         if not ok:
             time.sleep(0.2)
             continue
+            
         ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
         if ok:
-            name = CFG["camera_name"]
             now = time.time()
             with _jpeg_lock:
-                _latest_jpeg = buf.tobytes()
-                _latest_jpegs[name] = _latest_jpeg
-                _frame_ts[name] = now
+                jpeg_bytes = buf.tobytes()
+                _latest_jpegs[cam_id] = jpeg_bytes
+                if cam_id == CFG["camera_name"]:
+                    _latest_jpeg = jpeg_bytes
+                _frame_ts[cam_id] = now
                 _stats["stream_ids"] = fresh_stream_ids(now=now)
                 note_frame()
         time.sleep(delay)
     cap.release()
-
 
 def start_camera_thread() -> None:
     backend = CFG["backend"]
@@ -270,12 +278,18 @@ def start_camera_thread() -> None:
         args = (host, int(CFG["zmq_port"]), CFG["camera_name"])
         threading.Thread(target=jpeg_loop_zmq, args=args, daemon=True).start()
         return
-    threading.Thread(
-        target=jpeg_loop_opencv,
-        args=(int(CFG["opencv_index"]), int(CFG["width"]), int(CFG["height"]), int(CFG["fps"])),
-        daemon=True,
-    ).start()
 
+    # For local opencv, capture all three feeds concurrently (2 x D405 + 1 x Overview)
+    fps_val = int(CFG["fps"])
+    w_val = int(CFG["width"])
+    h_val = int(CFG["height"])
+
+    for cam_name, cam_idx in LOCAL_CAMERA_MAP.items():
+        threading.Thread(
+            target=local_camera_capture_worker,
+            args=(cam_name, cam_idx, w_val, h_val, fps_val),
+            daemon=True
+        ).start()
 
 def tcp_ok(host: str, port: int, timeout: float = 0.35) -> bool:
     if not host or host.startswith("CHANGE_ME"):
@@ -286,14 +300,12 @@ def tcp_ok(host: str, port: int, timeout: float = 0.35) -> bool:
     except OSError:
         return False
 
-
 def process_running(needle: str) -> bool:
     try:
         r = subprocess.run(["pgrep", "-f", needle], capture_output=True, text=True, check=False)
     except OSError:
         return False
     return bool(r.stdout.strip())
-
 
 def last_banner() -> tuple[str | None, str | None]:
     if not SESSION_LOG.is_file():
@@ -304,7 +316,6 @@ def last_banner() -> tuple[str | None, str | None]:
         return None, None
     ts, label = matches[-1]
     return ts, label
-
 
 def session_state() -> str:
     recording = process_running("so101 record") or process_running("lerobot-record")
@@ -319,7 +330,6 @@ def session_state() -> str:
         return "DISCONNECTED"
     return "IDLE"
 
-
 def elapsed_s(state: str) -> float:
     if state not in {"TELEOP", "RECORDING"}:
         return 0.0
@@ -331,7 +341,6 @@ def elapsed_s(state: str) -> float:
     except ValueError:
         return 0.0
     return max(0.0, time.time() - started)
-
 
 def arm_status() -> dict:
     ports = load_env_file(ROOT / "config" / "ports.env")
@@ -346,7 +355,6 @@ def arm_status() -> dict:
         "leader_ok": bool(leader) and not leader.startswith("CHANGE_ME") and Path(leader).exists(),
     }
 
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     apply_camera_env()
@@ -354,15 +362,12 @@ async def lifespan(_app: FastAPI):
     yield
     _stop.set()
 
-
 app = FastAPI(title="SO-101 Visuomotor Manipulation Lab", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
-
 
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
-
 
 @app.get("/api/status")
 def api_status():
@@ -405,31 +410,26 @@ def api_status():
         "v1": True,
         "hint": (
             "Dashboard streams every RGB/depth view from camera.env; joints while record/eval. "
-            "Offline tiles mean that key is missing from the Omen ZMQ packet "
-            "(restart omen\\run_publish.bat with WRIST_SERIAL + BASE_SERIAL set)."
+            "Offline tiles mean that key is missing from the local USB index configurations."
         ),
     }
-
 
 @app.get("/api/joints")
 def api_joints():
     from so101.live_viz import read_live_joints
-
     data = read_live_joints()
     if data is None:
         return {"fresh": False, "names": [], "state": [], "action": [], "age_s": None}
     return data
 
-
+# Pydantic v2 compliant schema
 class KeyBody(BaseModel):
     key: str = Field(..., min_length=1, max_length=8)
-
 
 @app.post("/api/key")
 def api_key(body: KeyBody):
     """Forward an operator key to the running record/eval/dagger process."""
     from so101.keys import DASHBOARD_KEYS, push_live_key
-
     raw = body.key
     ch = " " if raw in {" ", "Space", "space"} else raw.lower()
     if ch not in DASHBOARD_KEYS:
@@ -453,13 +453,11 @@ def api_key(body: KeyBody):
         "hint": None if listening else "No record/eval/dagger process is listening yet",
     }
 
-
 @app.get("/api/log")
 def api_log():
     if not SESSION_LOG.is_file():
         return {"text": "(no session log yet — run bash scripts/06_teleoperate.sh or 08_record.sh)"}
     return {"text": SESSION_LOG.read_text(errors="replace")[-80_000:]}
-
 
 @app.get("/api/log/stream")
 async def log_stream():
@@ -482,9 +480,7 @@ async def log_stream():
                 chunk = SESSION_LOG.read_bytes()[pos:].decode(errors="replace")
                 pos = size
                 yield f"data: {json.dumps({'reset': False, 'chunk': chunk})}\n\n"
-
     return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
-
 
 def mjpeg_iter(camera_name: str | None = None):
     boundary = b"--frame"
@@ -509,7 +505,7 @@ def mjpeg_iter(camera_name: str | None = None):
             )
             cv2.putText(
                 blank,
-                "not in Omen ZMQ packet",
+                "not configured locally",
                 (40, 160),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.55,
@@ -521,18 +517,15 @@ def mjpeg_iter(camera_name: str | None = None):
         yield boundary + b"\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
         time.sleep(0.05)
 
-
 @app.get("/mjpeg")
 def mjpeg():
     return StreamingResponse(mjpeg_iter(), media_type="multipart/x-mixed-replace; boundary=frame")
-
 
 @app.get("/mjpeg/{camera_name}")
 def mjpeg_named(camera_name: str):
     return StreamingResponse(
         mjpeg_iter(camera_name), media_type="multipart/x-mixed-replace; boundary=frame"
     )
-
 
 def main() -> None:
     p = argparse.ArgumentParser()
@@ -541,11 +534,9 @@ def main() -> None:
     args = p.parse_args()
     apply_camera_env()
     import uvicorn
-
     print(f"Operator site  http://{args.host}:{args.port}", flush=True)
     print(f"Camera {CFG['backend']} {CFG['zmq_host']}:{CFG['zmq_port']} names={CFG.get('camera_names', CFG['camera_name'])}", flush=True)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
-
 
 if __name__ == "__main__":
     main()
