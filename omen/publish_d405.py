@@ -4,6 +4,9 @@ LeRobot / so101 on the Mac subscribes with type=zmq. Message shape:
   {"images": {"wrist": "<JPEG b64>", "overhead": "...", "base": "..."},
    "depths": {"wrist": "<uint16 PNG b64>", "base": "..."}}
 
+Cameras are independent: if one disconnects, the others keep publishing. The
+publisher stays up and retries offline cameras until they reappear (no relaunch).
+
 Usage (Anaconda Prompt on the Omen):
   conda activate omen-d405
   python omen/publish_d405.py --list-realsense
@@ -28,6 +31,9 @@ import cv2
 import numpy as np
 import pyrealsense2 as rs
 import zmq
+
+RETRY_S = 2.0
+GRAB_TIMEOUT_MS = 1000
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,6 +71,12 @@ def parse_args() -> argparse.Namespace:
         help="If set, also write rgb_*.jpg and depth_*.png here for later copy to Mac",
     )
     p.add_argument("--dump-every", type=int, default=1, help="Save every Nth frame to dump-dir")
+    p.add_argument(
+        "--retry-s",
+        type=float,
+        default=RETRY_S,
+        help="Seconds between reconnect attempts for offline cameras",
+    )
     return p.parse_args()
 
 
@@ -151,6 +163,29 @@ class D405Stream:
     serial: str
     pipeline: rs.pipeline
     align: rs.align | None
+    with_depth: bool
+
+
+@dataclass
+class CamSlot:
+    """One logical camera that can go offline and reconnect without killing PUB."""
+
+    kind: str  # "d405" | "webcam"
+    name: str
+    serial: str = ""
+    webcam_index: int = -1
+    with_depth: bool = False
+    width: int = 640
+    height: int = 480
+    fps: int = 15
+    stream: D405Stream | None = None
+    cap: cv2.VideoCapture | None = None
+    last_bgr: np.ndarray | None = None
+    last_depth: np.ndarray | None = None
+    online: bool = False
+    next_retry_t: float = 0.0
+    last_error: str = ""
+    configured: bool = True
 
 
 def start_d405(
@@ -174,11 +209,20 @@ def start_d405(
     got = device.get_info(rs.camera_info.serial_number)
     print(f"D405 {name!r} serial={got} depth={'on' if with_depth else 'off'}", flush=True)
     align = rs.align(rs.stream.color) if with_depth else None
-    return D405Stream(name=name, serial=got, pipeline=pipeline, align=align)
+    return D405Stream(name=name, serial=got, pipeline=pipeline, align=align, with_depth=with_depth)
 
 
-def grab_d405(stream: D405Stream) -> tuple[np.ndarray, np.ndarray | None]:
-    frames = stream.pipeline.wait_for_frames(timeout_ms=5000)
+def stop_d405(stream: D405Stream | None) -> None:
+    if stream is None:
+        return
+    try:
+        stream.pipeline.stop()
+    except Exception:
+        pass
+
+
+def grab_d405(stream: D405Stream, timeout_ms: int = GRAB_TIMEOUT_MS) -> tuple[np.ndarray, np.ndarray | None]:
+    frames = stream.pipeline.wait_for_frames(timeout_ms=timeout_ms)
     if stream.align is not None:
         frames = stream.align.process(frames)
     color = frames.get_color_frame()
@@ -191,6 +235,90 @@ def grab_d405(stream: D405Stream) -> tuple[np.ndarray, np.ndarray | None]:
         if depth:
             depth_u16 = np.asanyarray(depth.get_data())
     return bgr, depth_u16
+
+
+def mark_offline(slot: CamSlot, err: str, *, retry_s: float) -> None:
+    was_online = slot.online
+    if slot.kind == "d405":
+        stop_d405(slot.stream)
+        slot.stream = None
+    else:
+        if slot.cap is not None:
+            try:
+                slot.cap.release()
+            except Exception:
+                pass
+            slot.cap = None
+    slot.online = False
+    slot.last_error = err
+    slot.next_retry_t = time.time() + retry_s
+    if was_online:
+        print(f"OFFLINE {slot.name}: {err} — will retry in {retry_s:.1f}s", flush=True)
+
+
+def try_connect(slot: CamSlot, *, retry_s: float, force: bool = False) -> bool:
+    if slot.online and not force:
+        return True
+    now = time.time()
+    if not force and now < slot.next_retry_t:
+        return False
+    slot.next_retry_t = now + retry_s
+    try:
+        if slot.kind == "d405":
+            stop_d405(slot.stream)
+            slot.stream = start_d405(
+                slot.name,
+                slot.serial,
+                slot.width,
+                slot.height,
+                slot.fps,
+                with_depth=slot.with_depth,
+            )
+        else:
+            if slot.cap is not None:
+                try:
+                    slot.cap.release()
+                except Exception:
+                    pass
+            idx = slot.webcam_index
+            if idx < 0:
+                idx = resolve_webcam_index(-1)
+                slot.webcam_index = idx
+            slot.cap = open_webcam(idx, slot.width, slot.height, slot.fps)
+            print(f"Overhead webcam index={idx}  name={slot.name}", flush=True)
+        slot.online = True
+        slot.last_error = ""
+        print(f"ONLINE {slot.name}", flush=True)
+        return True
+    except Exception as e:
+        mark_offline(slot, str(e), retry_s=retry_s)
+        return False
+
+
+def grab_slot(slot: CamSlot, *, retry_s: float) -> tuple[np.ndarray | None, np.ndarray | None]:
+    if not slot.online:
+        try_connect(slot, retry_s=retry_s)
+        if not slot.online:
+            return None, None
+    try:
+        if slot.kind == "d405":
+            assert slot.stream is not None
+            bgr, depth = grab_d405(slot.stream)
+            slot.last_bgr = bgr
+            slot.last_depth = depth
+            return bgr, depth
+        assert slot.cap is not None
+        ok, web_bgr = slot.cap.read()
+        if not ok or web_bgr is None:
+            raise RuntimeError("webcam read failed")
+        if web_bgr.shape[1] != slot.width or web_bgr.shape[0] != slot.height:
+            web_bgr = cv2.resize(web_bgr, (slot.width, slot.height))
+        slot.last_bgr = web_bgr
+        slot.last_depth = None
+        return web_bgr, None
+    except Exception as e:
+        mark_offline(slot, str(e), retry_s=retry_s)
+        return None, None
 
 
 def main() -> int:
@@ -229,86 +357,87 @@ def main() -> int:
     wrist_serial = (args.wrist_serial or args.serial or "").strip()
     base_serial = (args.base_serial or "").strip()
     with_depth = not args.no_depth
+    retry_s = float(args.retry_s)
 
     if not base_serial:
         print(
             "WARNING: no --base-serial — publishing a single D405 as "
-            f"{args.camera_name!r}. Dashboard base tile will stay offline. "
-            "Set BASE_SERIAL in omen\\camera_serials.bat and restart.",
+            f"{args.camera_name!r}. Dashboard base tile will stay offline until "
+            "BASE_SERIAL is set and the camera connects.",
             flush=True,
         )
-    streams: list[D405Stream] = []
-    try:
-        streams.append(
-            start_d405(
-                args.camera_name,
-                wrist_serial,
-                args.width,
-                args.height,
-                args.fps,
-                with_depth=with_depth,
-            )
+    if wrist_serial and base_serial and wrist_serial == base_serial:
+        print(
+            f"ERROR: --wrist-serial and --base-serial are the same ({wrist_serial})",
+            file=sys.stderr,
         )
-        if base_serial:
-            if not wrist_serial:
-                print(
-                    "Warning: --base-serial set without --wrist-serial; "
-                    "pin both serials so wrist/base do not swap after replug.",
-                    flush=True,
-                )
-            if wrist_serial and base_serial == wrist_serial:
-                raise RuntimeError(
-                    f"--wrist-serial and --base-serial are the same ({wrist_serial})"
-                )
-            base_depth = with_depth and not args.base_no_depth
-            streams.append(
-                start_d405(
-                    args.base_name,
-                    base_serial,
-                    args.width,
-                    args.height,
-                    args.fps,
-                    with_depth=base_depth,
-                )
-            )
-    except Exception as e:
-        for s in streams:
-            try:
-                s.pipeline.stop()
-            except Exception:
-                pass
-        print("Failed to start RealSense pipeline:", e, file=sys.stderr)
-        print("Plug D405 into USB 3, close RealSense Viewer, then retry.", file=sys.stderr)
-        print("List devices: python omen\\publish_d405.py --list-realsense", file=sys.stderr)
         return 1
 
-    webcam = None
-    webcam_index = -1
+    slots: list[CamSlot] = [
+        CamSlot(
+            kind="d405",
+            name=args.camera_name,
+            serial=wrist_serial,
+            with_depth=with_depth,
+            width=args.width,
+            height=args.height,
+            fps=args.fps,
+        )
+    ]
+    if base_serial:
+        if not wrist_serial:
+            print(
+                "Warning: --base-serial set without --wrist-serial; "
+                "pin both serials so wrist/base do not swap after replug.",
+                flush=True,
+            )
+        slots.append(
+            CamSlot(
+                kind="d405",
+                name=args.base_name,
+                serial=base_serial,
+                with_depth=with_depth and not args.base_no_depth,
+                width=args.width,
+                height=args.height,
+                fps=args.fps,
+            )
+        )
     if not args.no_overhead:
-        try:
-            webcam_index = resolve_webcam_index(args.webcam_index)
-            webcam = open_webcam(webcam_index, args.width, args.height, args.fps)
-        except Exception as e:
-            for s in streams:
-                s.pipeline.stop()
-            label = args.webcam_index if args.webcam_index >= 0 else "auto"
-            print(f"Failed to open overhead webcam ({label}): {e}", file=sys.stderr)
-            print("Run: python omen\\publish_d405.py --list-webcams", file=sys.stderr)
-            return 1
-        print(f"Overhead webcam index={webcam_index}  name={args.overhead_name}", flush=True)
+        slots.append(
+            CamSlot(
+                kind="webcam",
+                name=args.overhead_name,
+                webcam_index=args.webcam_index,
+                width=args.width,
+                height=args.height,
+                fps=args.fps,
+            )
+        )
+
+    # Soft start: bring up whatever is present; keep retrying the rest.
+    for slot in slots:
+        try_connect(slot, retry_s=retry_s, force=True)
+    online = [s.name for s in slots if s.online]
+    offline = [s.name for s in slots if not s.online]
+    if online:
+        print(f"Started with online={online}" + (f" offline={offline}" if offline else ""), flush=True)
+    else:
+        print(
+            "No cameras online yet — ZMQ PUB will stay up and retry "
+            f"every {retry_s:.1f}s: {[s.name for s in slots]}",
+            flush=True,
+        )
 
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.PUB)
     try:
         sock.bind(f"tcp://{args.bind}:{args.port}")
     except zmq.ZMQError as e:
-        for s in streams:
-            try:
-                s.pipeline.stop()
-            except Exception:
-                pass
-        if webcam is not None:
-            webcam.release()
+        for s in slots:
+            if s.kind == "d405":
+                stop_d405(s.stream)
+            elif s.cap is not None:
+                s.cap.release()
         sock.close(0)
         ctx.term()
         print(
@@ -317,16 +446,17 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    cam_keys = [s.name for s in streams] + ([] if webcam is None else [args.overhead_name])
-    print(f"ZMQ PUB tcp://{args.bind}:{args.port}  cameras={cam_keys}", flush=True)
+
+    cam_keys = [s.name for s in slots]
+    print(f"ZMQ PUB tcp://{args.bind}:{args.port}  cameras={cam_keys} (resilient)", flush=True)
     print(
         "On the Mac set CAMERA_NAMES="
         + ",".join(cam_keys)
         + " and ZMQ_HOST to this PC's IP (Wi-Fi from ipconfig, or 192.168.2.2 after omen\\setup_ethernet_link.bat).",
         flush=True,
     )
+    print("Unplug/replug any camera — others keep streaming; reconnect is automatic.", flush=True)
 
-    last_web: np.ndarray | None = None
     frame_i = 0
     t0 = time.time()
     n = 0
@@ -334,26 +464,27 @@ def main() -> int:
         while True:
             images: dict[str, str] = {}
             depths: dict[str, str] = {}
-            for stream in streams:
-                bgr, depth_u16 = grab_d405(stream)
-                images[stream.name] = jpeg_b64(bgr, args.jpeg_quality)
-                if depth_u16 is not None:
-                    depths[stream.name] = depth_png_b64(depth_u16)
-            if webcam is not None:
-                ok, web_bgr = webcam.read()
-                if ok and web_bgr is not None:
-                    if web_bgr.shape[1] != args.width or web_bgr.shape[0] != args.height:
-                        web_bgr = cv2.resize(web_bgr, (args.width, args.height))
-                    last_web = web_bgr
-                if last_web is None:
+            offline_now: list[str] = []
+            for slot in slots:
+                bgr, depth_u16 = grab_slot(slot, retry_s=retry_s)
+                if bgr is None:
+                    offline_now.append(slot.name)
                     continue
-                images[args.overhead_name] = jpeg_b64(last_web, args.jpeg_quality)
-            payload: dict[str, object] = {"images": images, "ts": time.time()}
+                images[slot.name] = jpeg_b64(bgr, args.jpeg_quality)
+                if depth_u16 is not None:
+                    depths[slot.name] = depth_png_b64(depth_u16)
+
+            payload: dict[str, object] = {
+                "images": images,
+                "ts": time.time(),
+                "offline": offline_now,
+            }
             if depths:
                 payload["depths"] = depths
+            # Always publish so the Mac link stays alive even if every cam is down.
             sock.send_string(json.dumps(payload))
 
-            if dump and frame_i % max(1, args.dump_every) == 0:
+            if dump and images and frame_i % max(1, args.dump_every) == 0:
                 for name, b64 in images.items():
                     (dump / f"{name}_{frame_i:06d}.jpg").write_bytes(base64.b64decode(b64))
                 for name, b64 in depths.items():
@@ -367,17 +498,24 @@ def main() -> int:
             if n % 30 == 0:
                 dt = time.time() - t0
                 keys = list(images) + [f"depth:{k}" for k in depths]
-                print(f"published {n} frames ({n / max(dt, 1e-3):.1f} fps) keys={keys}", flush=True)
+                off = f" offline={offline_now}" if offline_now else ""
+                print(
+                    f"published {n} frames ({n / max(dt, 1e-3):.1f} fps) keys={keys}{off}",
+                    flush=True,
+                )
+            if not images:
+                time.sleep(0.05)
     except KeyboardInterrupt:
         print("\nStopped.", flush=True)
     finally:
-        for s in streams:
-            try:
-                s.pipeline.stop()
-            except Exception:
-                pass
-        if webcam is not None:
-            webcam.release()
+        for s in slots:
+            if s.kind == "d405":
+                stop_d405(s.stream)
+            elif s.cap is not None:
+                try:
+                    s.cap.release()
+                except Exception:
+                    pass
         sock.close(0)
         ctx.term()
     return 0

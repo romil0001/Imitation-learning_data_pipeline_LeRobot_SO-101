@@ -27,4 +27,5 @@ if /I "%WRIST_SERIAL%"=="%BASE_SERIAL%" (
 )
 if defined BASE_DEPTH_FLAG (set "BASE_DEPTH_MSG=off") else (set "BASE_DEPTH_MSG=on")
 echo Using wrist=%WRIST_SERIAL% base=%BASE_SERIAL% webcam=%WEBCAM_INDEX% base_depth=%BASE_DEPTH_MSG%
+echo Resilient PUB: if one camera drops, others keep streaming; reconnect is automatic.
 python omen\publish_d405.py --wrist-serial %WRIST_SERIAL% --base-serial %BASE_SERIAL% --webcam-index %WEBCAM_INDEX% %BASE_DEPTH_FLAG% %*
