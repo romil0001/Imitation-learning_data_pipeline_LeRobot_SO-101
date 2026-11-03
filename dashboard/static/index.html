@@ -1,136 +1,794 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>SO-101 Visuomotor Lab · Operator Console</title>
-  <link rel="stylesheet" href="/static/app.css"/>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>SO-101 Robotics Web UI · Visuomotor Lab</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg-app: #1a1a1a;
+            --bg-canvas: #151515;
+            --bg-bar: #111111;
+            --bg-panel: #222222;
+            --bg-header: #1f242c;
+            --bg-input: #141414;
+            --border-line: #333333;
+            --border-panel: #444444;
+            --text-main: #ffffff;
+            --text-muted: #aaaaaa;
+            --primary-blue: #007acc;
+            --primary-cyan: #4ed8d8;
+            --amber: #f7b731;
+            --status-ok: #3fb950;
+            --status-err: #e74c3c;
+            --teleop-amber: #e3b341;
+            --preview-ghost: #58a6ff;
+            --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-app);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* ---------------- TOP SYSTEM STATUS BAR ---------------- */
+        #sys-status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 28px;
+            background-color: var(--bg-bar);
+            border-bottom: 1px solid var(--border-line);
+            padding: 2px 12px;
+            font-family: var(--font-mono);
+            font-size: 11.5px;
+            z-index: 2000;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #sys-status-metrics {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #sys-status-metrics span span {
+            color: var(--text-main);
+            font-weight: bold;
+        }
+
+        .status-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-btn {
+            background-color: #2a2a2a;
+            color: #fff;
+            border: 1px solid var(--border-panel);
+            border-radius: 3px;
+            padding: 2px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: background 0.15s ease;
+        }
+
+        .status-btn:hover { background-color: #3a3a3a; }
+
+        .status-select {
+            background-color: #2a2a2a;
+            color: #fff;
+            border: 1px solid var(--border-panel);
+            border-radius: 3px;
+            padding: 2px 4px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+        }
+
+        .status-pill {
+            padding: 2px 7px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            border: 1px solid transparent;
+        }
+
+        .status-pill.idle { background: #222b3a; color: var(--preview-ghost); border-color: #304263; }
+        .status-pill.teleop { background: #3a3219; color: var(--amber); border-color: #705820; }
+        .status-pill.recording { background: #3a1a1a; color: #ff6b6b; border-color: #702525; animation: blink 1.2s infinite; }
+        .status-pill.ok { background: #132a1e; color: var(--status-ok); border-color: #1e5c3c; }
+        .status-pill.bad { background: #331515; color: var(--status-err); border-color: #6e2020; }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+
+        /* ---------------- ALERT SYSTEM ---------------- */
+        #alert-bell { position: relative; }
+        #alert-bell .badge {
+            position: absolute;
+            top: -4px;
+            right: -5px;
+            background: var(--status-err);
+            color: #fff;
+            border-radius: 50%;
+            font-size: 9px;
+            min-width: 14px;
+            height: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        #alert-panel {
+            position: fixed;
+            top: 32px;
+            right: 10px;
+            width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            border: 1px solid var(--border-panel);
+            border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            z-index: 3000;
+            display: none;
+            padding: 8px;
+        }
+
+        #alert-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border-line);
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--text-muted);
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 8px 10px;
+            margin-bottom: 4px;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .alert-item.info { background: #1a3a4a; border-left: 3px solid #3498db; }
+        .alert-item.warning { background: #3a3520; border-left: 3px solid var(--amber); }
+        .alert-item.error { background: #3a1a1a; border-left: 3px solid var(--status-err); }
+
+        /* ---------------- BROWSER WARNING POPUP ---------------- */
+        #browser-warning-popup {
+            position: fixed;
+            top: 38px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(480px, 92vw);
+            background: rgba(38, 31, 20, 0.96);
+            border: 1px solid rgba(243, 156, 18, 0.45);
+            border-left: 4px solid var(--amber);
+            border-radius: 8px;
+            padding: 12px 16px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.75);
+            backdrop-filter: blur(6px);
+            z-index: 4000;
+            display: none;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        #browser-warning-popup .warning-title { font-weight: bold; color: var(--amber); margin-bottom: 4px; font-size: 13px; }
+        #browser-warning-popup .warning-desc { color: #d0ccc4; font-size: 12px; line-height: 1.4; }
+        #browser-warning-popup .warning-dismiss-btn {
+            background: rgba(243, 156, 18, 0.18);
+            color: var(--amber);
+            border: 1px solid rgba(243, 156, 18, 0.4);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* ---------------- FIXED VIEWPORT CONTAINER (16:9 DOCK) ---------------- */
+        #ui-container {
+            position: absolute;
+            top: calc(50% + 14px);
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100vw;
+            height: calc(100vh - 28px);
+            background-color: var(--bg-canvas);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            container-type: size;
+            overflow: hidden;
+        }
+
+        /* ---------------- WINDOWS / DOCKED UI PANELS ---------------- */
+        .ui-element {
+            position: absolute;
+            box-sizing: border-box;
+            background-color: #242932;
+            border: 1px solid var(--border-panel);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            z-index: 5;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+
+        .ui-element.selected {
+            border-color: #2581df;
+            box-shadow: 0 0 0 1px #2581df, 0 8px 24px rgba(0,0,0,0.6);
+            z-index: 100;
+        }
+
+        .window-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #1b2028;
+            padding: 5px 8px;
+            cursor: grab;
+            border-bottom: 1px solid var(--border-line);
+            user-select: none;
+        }
+        .window-header:active { cursor: grabbing; }
+
+        .window-title {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #d1d7e0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .window-title .meta {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: normal;
+        }
+
+        .window-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .window-header-actions span {
+            cursor: pointer;
+            font-size: 11px;
+            color: #888;
+            padding: 2px 5px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 2px;
+            line-height: 1;
+        }
+        .window-header-actions span:hover { color: #fff; background: rgba(255,255,255,0.15); }
+
+        .window-content {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+            padding: 8px;
+            position: relative;
+        }
+
+        /* ---------------- CAMERA SLOTS & GRID ---------------- */
+        .cams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 8px;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+        }
+
+        .cam-slot {
+            background: #000;
+            border: 1px solid var(--border-panel);
+            border-radius: 4px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            aspect-ratio: 4 / 3;
+        }
+
+        .cam-slot .stage {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            position: relative;
+        }
+
+        .cam-slot .stage img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .cam-slot .cam-hud-tag {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            background: rgba(0,0,0,0.75);
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: bold;
+            color: var(--primary-cyan);
+            z-index: 10;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* ---------------- JOINT TELEMETRY BARS ---------------- */
+        .joint-list { display: flex; flex-direction: column; gap: 6px; }
+        .joint-row { display: grid; grid-template-columns: 85px 1fr 50px; gap: 8px; align-items: center; }
+        .joint-row .name {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .joint-bars { display: flex; flex-direction: column; gap: 2px; }
+        .bar-track {
+            height: 6px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-line);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .bar-fill { height: 100%; width: 0%; transition: width 0.05s ease-out; }
+        .bar-fill.state { background: var(--preview-ghost); }
+        .bar-fill.action { background: var(--teleop-amber); }
+        .joint-row .vals { font-family: var(--font-mono); font-size: 10px; text-align: right; }
+
+        .joint-legend {
+            display: flex;
+            gap: 16px;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid var(--border-line);
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+        .joint-legend .lg { display: flex; align-items: center; gap: 5px; }
+        .joint-legend .state::before { content: ""; width: 8px; height: 8px; background: var(--preview-ghost); border-radius: 2px; }
+        .joint-legend .action::before { content: ""; width: 8px; height: 8px; background: var(--teleop-amber); border-radius: 2px; }
+
+        /* ---------------- HARDWARE KEY-VALUE ---------------- */
+        .kv { list-style: none; margin: 0; padding: 0; }
+        .kv li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px solid #1f242d;
+            font-size: 12px;
+        }
+        .kv li:last-child { border-bottom: none; }
+        .kv .k { color: var(--text-muted); }
+        .kv .v { font-family: var(--font-mono); font-size: 11px; }
+        .kv .v.ok { color: var(--status-ok); }
+        .kv .v.bad { color: var(--status-err); }
+
+        /* ---------------- OPERATOR HOTKEYS ---------------- */
+        .keys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+        .keys li { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); }
+        kbd {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 11px;
+            color: var(--teleop-amber);
+            background: var(--bg-input);
+            border: 1px solid var(--border-panel);
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.5);
+        }
+        kbd:hover { border-color: var(--teleop-amber); background: rgba(247, 183, 49, 0.12); }
+
+        /* ---------------- LOG TERMINAL ---------------- */
+        #log {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-input);
+            border: none;
+            padding: 8px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            line-height: 1.45;
+            color: #d1d7e0;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        /* ---------------- TASKBAR & DOCK DOWNS ---------------- */
+        #taskbar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background-color: rgba(20, 24, 30, 0.95);
+            border-top: 1px solid var(--border-panel);
+            z-index: 900;
+        }
+        #taskbar:empty { display: none; }
+        .taskbar-item {
+            background-color: #2b313c;
+            color: #d1d7e0;
+            border: 1px solid #444d5c;
+            border-radius: 3px;
+            padding: 2px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .taskbar-item:hover { background-color: #3b4352; color: #fff; }
+
+        .minimized { display: none !important; }
+
+        /* ---------------- TOAST ---------------- */
+        #toast {
+            position: fixed;
+            bottom: 34px;
+            right: 14px;
+            background: #1f242c;
+            border: 1px solid var(--primary-cyan);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: var(--font-mono);
+            z-index: 5000;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+        }
+    </style>
 </head>
 <body>
 
-  <!-- ================= TOP HUD TELEOP STATUS BAR ================= -->
-  <header class="top">
-    <div class="brand">
-      <span class="mark">SO-101</span>
-      <span class="sub">Visuomotor Manipulation Lab · Follower Arm</span>
+    <!-- 1. System Metrics Top HUD -->
+    <div id="sys-status-bar">
+        <div id="sys-status-metrics">
+            <span>PING: <span id="sys-ping">12</span>ms</span> |
+            <span>CPU: <span id="sys-cpu">18.4</span>%</span> |
+            <span>RAM: <span id="sys-ram">44.1</span>%</span> |
+            <span>DISK: <span id="sys-disk">22.8</span>%</span>
+            <span id="sys-gpu-section"> |
+                <span>GPU: <span id="sys-gpu">34</span>%</span> |
+                <span>MEM: <span id="sys-gpu-mem">3.2</span>GB</span>
+            </span>
+        </div>
+
+        <div class="status-controls">
+            <span id="state" class="status-pill idle">IDLE</span>
+            <span id="timer" class="status-pill" style="background:#090c10; border:1px solid #333;">00:00.0</span>
+            <span id="omen-pill" class="status-pill ok">ZMQ ONLINE</span>
+
+            <button id="firefox-status-pill" onclick="showBrowserWarning()" style="display:none;" class="status-btn">⚠️ Chrome Recommended</button>
+
+            <span>FPS:
+                <select id="fps-select" class="status-select" onchange="setTargetFps(this.value)">
+                    <option value="0" selected>Max (30)</option>
+                    <option value="25">25</option>
+                    <option value="15">15</option>
+                    <option value="5">5</option>
+                </select>
+            </span>
+
+            <button class="status-btn" onclick="snapshotAllCameras()">📸 Snapshot</button>
+            <button class="status-btn" id="record-btn" onclick="toggleRecording()">🔴 Tab Record</button>
+            <button class="status-btn" id="alert-bell" onclick="toggleAlertPanel()">🔔 Alerts<span class="badge" id="alert-badge" style="display:none;">0</span></button>
+        </div>
     </div>
 
-    <div class="pills">
-      <span id="state" class="pill idle" title="Active Teleoperation State">IDLE</span>
-      <span id="timer" class="timer" title="Elapsed Routine Time">00:00.0</span>
-      <span id="omen-pill" class="pill ghost" title="Camera Streaming Bridge">CONNECTING…</span>
+    <!-- 2. Main 16:9 Multi-Window Canvas -->
+    <div id="ui-container">
+
+        <!-- Camera Feeds Window (2x D405 + 1x Overhead RGB) -->
+        <div id="win-cameras" class="ui-element selected" style="top: 8px; left: 8px; width: calc(65% - 12px); height: calc(68% - 12px);">
+            <div class="window-header">
+                <div class="window-title">
+                    <span>📹 Camera Viewports</span>
+                    <span id="cam-meta" class="meta">Scanning streams…</span>
+                </div>
+                <div class="window-header-actions">
+                    <span onclick="minimizeWindow('win-cameras')">🗕</span>
+                </div>
+            </div>
+            <div class="window-content" style="padding: 4px; background:#000;">
+                <div class="cams-grid" id="cams">
+                    <!-- Dynamically populated by app.js -->
+                    <div class="cam-slot">
+                        <span class="cam-hud-tag">D405 Left (Wrist)</span>
+                        <div class="stage"><img src="/mjpeg/d405_left" alt="D405 Left" onerror="this.src=''"/></div>
+                    </div>
+                    <div class="cam-slot">
+                        <span class="cam-hud-tag">D405 Right (Wrist)</span>
+                        <div class="stage"><img src="/mjpeg/d405_right" alt="D405 Right" onerror="this.src=''"/></div>
+                    </div>
+                    <div class="cam-slot">
+                        <span class="cam-hud-tag">Overview RGB</span>
+                        <div class="stage"><img src="/mjpeg/overview_rgb" alt="Overview" onerror="this.src=''"/></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Joint Angle Telemetry Window -->
+        <div id="win-joints" class="ui-element" style="top: 8px; right: 8px; width: 34%; height: calc(50% - 12px);">
+            <div class="window-header">
+                <div class="window-title">
+                    <span>🦾 SO-101 Joint Telemetry</span>
+                    <span id="joints-meta" class="meta">STANDBY</span>
+                </div>
+                <div class="window-header-actions">
+                    <span onclick="minimizeWindow('win-joints')">🗕</span>
+                </div>
+            </div>
+            <div class="window-content">
+                <div class="joint-legend">
+                    <span class="lg state">State (Follower)</span>
+                    <span class="lg action">Action (Leader Target)</span>
+                </div>
+                <div id="joints" class="joint-list">
+                    <!-- Populated dynamically via read_live_joints() -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Hardware & Environment Window -->
+        <div id="win-hardware" class="ui-element" style="top: calc(50% + 4px); right: 8px; width: 34%; height: calc(48% - 12px);">
+            <div class="window-header">
+                <div class="window-title">
+                    <span>⚙️ Workcell Status & Hotkeys</span>
+                </div>
+                <div class="window-header-actions">
+                    <span onclick="minimizeWindow('win-hardware')">🗕</span>
+                </div>
+            </div>
+            <div class="window-content" style="display:flex; flex-direction:column; gap:10px;">
+                <ul class="kv" id="hw">
+                    <li><span class="k">Scanning Hardware…</span><span class="v">—</span></li>
+                </ul>
+
+                <div style="border-top:1px solid var(--border-line); padding-top:8px;">
+                    <div style="font-size:11px; font-weight:bold; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase;">Operator Hotkeys</div>
+                    <ul class="keys">
+                        <li><kbd data-key="space">Space</kbd> <span>toggle episode record</span></li>
+                        <li><kbd data-key="d">D</kbd> <span>refresh ports & buses</span></li>
+                        <li><kbd data-key="n">n</kbd> / <kbd data-key="r">r</kbd> / <kbd data-key="q">q</kbd> <span>save / redo / abort</span></li>
+                        <li><kbd data-key="y">y</kbd> / <kbd data-key="n">n</kbd> <span>score success/fail (eval)</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Terminal Logs Window -->
+        <div id="win-logs" class="ui-element" style="bottom: 8px; left: 8px; width: calc(65% - 12px); height: calc(30% - 4px);">
+            <div class="window-header">
+                <div class="window-title">
+                    <span>📜 Session Console Stream</span>
+                    <span class="meta">outputs/session.log</span>
+                </div>
+                <div class="window-header-actions">
+                    <span onclick="minimizeWindow('win-logs')">🗕</span>
+                </div>
+            </div>
+            <div class="window-content" style="padding:0;">
+                <pre id="log">Connecting to live session stream…</pre>
+            </div>
+        </div>
+
+        <!-- Taskbar for Minimized Tabs -->
+        <div id="taskbar"></div>
     </div>
-  </header>
 
-  <!-- ================= MAIN OPERATOR DOCK GRID ================= -->
-  <main class="grid">
-
-    <!-- Primary Camera Viewports -->
-    <section class="panel cam">
-      <div class="panel-h">
-        <h1>Camera Viewports</h1>
-        <span id="cam-meta" class="muted">Scanning devices…</span>
-      </div>
-      <!-- Feeds injected dynamically by app.js: D405 Left, D405 Right, Overview RGB -->
-      <div class="cams" id="cams">
-        <div class="cam-slot waiting">
-          <div class="stage empty-hint">Initializing camera streams…</div>
+    <!-- Alert Drawer -->
+    <div id="alert-panel">
+        <div id="alert-panel-header">
+            <span>System Alerts</span>
+            <button class="status-btn" onclick="toggleAlertPanel()">✕</button>
         </div>
-      </div>
-    </section>
-
-    <!-- Side Dock: Hardware, Joint Telemetry & Hotkeys -->
-    <aside class="side">
-
-      <!-- Hardware & Device Status -->
-      <section class="panel">
-        <div class="panel-h">
-          <h1>Hardware Telemetry</h1>
+        <div id="alert-list">
+            <div class="alert-item info">
+                <span>ℹ️</span>
+                <span>ZMQ Image multiplexer active (5555).</span>
+            </div>
         </div>
-        <ul class="kv" id="hw">
-          <li><span class="k">Loading…</span><span class="v">—</span></li>
-        </ul>
-      </section>
+    </div>
 
-      <!-- 6-DOF Follower Joint Telemetry -->
-      <section class="panel joints">
-        <div class="panel-h">
-          <h1>Joint Telemetry</h1>
-          <span id="joints-meta" class="muted">STANDBY</span>
+    <!-- Browser Warning Modal -->
+    <div id="browser-warning-popup" role="alert">
+        <div style="font-size: 20px;">⚠️</div>
+        <div>
+            <div class="warning-title">Chrome Recommended for Web UI</div>
+            <div class="warning-desc">For optimal streaming of three camera feeds simultaneously without WebGL canvas drops, Chrome is recommended.</div>
         </div>
-        <div class="joint-legend">
-          <span class="lg state">State (Actual)</span>
-          <span class="lg action">Action (Target)</span>
-        </div>
-        <div id="joints" class="joint-list">
-          <!-- Dynamically populated joint sliders -->
-        </div>
-      </section>
+        <button type="button" class="warning-dismiss-btn" onclick="dismissBrowserWarning()">Dismiss</button>
+    </div>
 
-      <!-- Operator Hotkeys & Episode Controls -->
-      <section class="panel">
-        <div class="panel-h">
-          <h1>Operator Keypad</h1>
-          <span class="muted">Click or Press</span>
-        </div>
+    <!-- Toast Notification -->
+    <div id="toast" hidden></div>
 
-        <ul class="keys" id="key-help">
-          <li>
-            <kbd data-key="space" tabindex="0">Space</kbd>
-            <span>start / stop recording episode</span>
-          </li>
-          <li>
-            <kbd data-key="d" tabindex="0">D</kbd>
-            <span>refresh hardware status</span>
-          </li>
-          <li>
-            <kbd data-key="a" tabindex="0">A</kbd>
-            <span>launch <code>08_record.sh</code></span>
-          </li>
-          <li>
-            <kbd data-key="n" tabindex="0">n</kbd> /
-            <kbd data-key="r" tabindex="0">r</kbd> /
-            <kbd data-key="q" tabindex="0">q</kbd>
-            <span>save / redo / cancel</span>
-          </li>
-          <li>
-            <kbd data-key="y" tabindex="0">y</kbd> /
-            <kbd data-key="n" tabindex="0">n</kbd>
-            <span>success / failure (eval)</span>
-          </li>
-          <li>
-            <kbd data-key="p" tabindex="0">p</kbd> /
-            <kbd data-key="c" tabindex="0">c</kbd>
-            <span>pause / intervention (dagger)</span>
-          </li>
-        </ul>
+    <!-- 3. Client Logic & Window Docking -->
+    <script>
+        // Check browser compatibility
+        function isFirefoxBrowser() {
+            return /Firefox\//i.test(navigator.userAgent || '');
+        }
+        function showBrowserWarning() {
+            document.getElementById('browser-warning-popup').style.display = 'flex';
+        }
+        function dismissBrowserWarning() {
+            document.getElementById('browser-warning-popup').style.display = 'none';
+        }
+        if (isFirefoxBrowser()) {
+            document.getElementById('firefox-status-pill').style.display = 'inline-flex';
+            showBrowserWarning();
+        }
 
-        <p class="muted small">
-          Active hotkeys work directly from the browser without focusing the terminal. Feeds reflect <code>camera.env</code> configuration (2× D405 + 1× RGB Overview).
-        </p>
-      </section>
+        // Window Minimize & Restore
+        function minimizeWindow(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.add('minimized');
+            const tb = document.getElementById('taskbar');
+            if (!document.getElementById('tb-' + id)) {
+                const item = document.createElement('div');
+                item.id = 'tb-' + id;
+                item.className = 'taskbar-item';
+                const title = el.querySelector('.window-title span')?.textContent || id;
+                item.textContent = title;
+                item.onclick = () => restoreWindow(id);
+                tb.appendChild(item);
+            }
+        }
 
-    </aside>
+        function restoreWindow(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('minimized');
+            const item = document.getElementById('tb-' + id);
+            if (item) item.remove();
+        }
 
-    <!-- Bottom Dock: Live Session Output Log -->
-    <section class="panel logs">
-      <div class="panel-h">
-        <h1>Console Stream</h1>
-        <span class="muted">outputs/session.log</span>
-      </div>
-      <pre id="log" tabindex="0" aria-label="Console Log Stream">Connecting to session log…</pre>
-    </section>
+        // Draggable window implementation
+        document.querySelectorAll('.ui-element').forEach(win => {
+            const header = win.querySelector('.window-header');
+            if (!header) return;
 
-  </main>
+            win.addEventListener('mousedown', () => {
+                document.querySelectorAll('.ui-element').forEach(w => w.classList.remove('selected'));
+                win.classList.add('selected');
+            });
 
-  <!-- HUD Toast Notification -->
-  <div id="toast" hidden role="status" aria-live="polite"></div>
+            let isDrag = false, startX, startY, origX, origY;
+            header.addEventListener('mousedown', (e) => {
+                if (e.target.closest('.window-header-actions')) return;
+                isDrag = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = win.getBoundingClientRect();
+                const parentRect = win.parentElement.getBoundingClientRect();
+                origX = rect.left - parentRect.left;
+                origY = rect.top - parentRect.top;
+                e.preventDefault();
+            });
 
-  <!-- Footer -->
-  <footer class="site-foot">
-    SO-101 Follower Arm Visuomotor Lab · LeRobot Teleop Bridge
-  </footer>
+            document.addEventListener('mousemove', (e) => {
+                if (!isDrag) return;
+                const parentRect = win.parentElement.getBoundingClientRect();
+                const newX = Math.max(0, Math.min(parentRect.width - win.offsetWidth, origX + (e.clientX - startX)));
+                const newY = Math.max(0, Math.min(parentRect.height - win.offsetHeight, origY + (e.clientY - startY)));
+                win.style.left = newX + 'px';
+                win.style.top = newY + 'px';
+                win.style.right = 'auto';
+                win.style.bottom = 'auto';
+            });
 
-  <script src="/static/app.js"></script>
+            document.addEventListener('mouseup', () => { isDrag = false; });
+        });
+
+        // Alerts Toggle
+        function toggleAlertPanel() {
+            const p = document.getElementById('alert-panel');
+            p.style.display = p.style.display === 'block' ? 'none' : 'block';
+        }
+
+        // Tab Screen Recording (from RoboticsUI)
+        let mediaRecorder = null, recordedChunks = [];
+        async function toggleRecording() {
+            const btn = document.getElementById('record-btn');
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                btn.textContent = '🔴 Tab Record';
+                btn.style.borderColor = 'var(--border-panel)';
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { displaySurface: 'browser' },
+                    preferCurrentTab: true,
+                    selfBrowserSurface: 'include'
+                });
+                recordedChunks = [];
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const a = document.createElement('a');
+                    a.download = `so101_rec_${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
+                    a.href = URL.createObjectURL(blob);
+                    a.click();
+                    stream.getTracks().forEach(t => t.stop());
+                };
+                mediaRecorder.start(1000);
+                btn.textContent = '⏹ Stop Rec';
+                btn.style.borderColor = 'var(--status-err)';
+            } catch (err) {
+                console.error('Screen recording aborted:', err);
+            }
+        }
+
+        function snapshotAllCameras() {
+            document.querySelectorAll('#cams img').forEach((img, i) => {
+                if (!img.src) return;
+                const a = document.createElement('a');
+                a.href = img.src;
+                a.download = `cam_${i}_snap.jpg`;
+                a.click();
+            });
+        }
+    </script>
+    <script src="/static/app.js"></script>
 </body>
 </html>
