@@ -227,9 +227,11 @@ async function refresh() {
 
     // 1. Session State & Timer
     const st = s.state || "IDLE";
-    stateEl.textContent = st;
-    stateEl.className = `pill ${clsFor(st)}`;
-    timerEl.textContent = fmtTime(s.elapsed_s);
+    if (stateEl) {
+      stateEl.textContent = st;
+      stateEl.className = `pill status-pill ${clsFor(st)}`;
+    }
+    if (timerEl) timerEl.textContent = fmtTime(s.elapsed_s);
 
     // 2. Camera Feeds
     const cam = s.camera || {};
@@ -244,7 +246,7 @@ async function refresh() {
     // 3. Controller / Bridge Pill
     if (omenEl) {
       omenEl.textContent = cam.reachable ? "FEED ONLINE" : "FEED DISCONNECTED";
-      omenEl.className = `pill ${cam.reachable ? "ok" : "bad"}`;
+      omenEl.className = `pill status-pill ${cam.reachable ? "ok" : "bad"}`;
     }
 
     // 4. Detailed Telemetry Rows
@@ -275,7 +277,7 @@ async function refresh() {
   } catch {
     if (omenEl) {
       omenEl.textContent = "SERVER DOWN";
-      omenEl.className = "pill bad";
+      omenEl.className = "pill status-pill bad";
     }
   }
 }
@@ -374,9 +376,9 @@ function setMode(next) {
   document.querySelectorAll(".mode-tab").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.mode === next);
   });
-  liveMain.hidden = next !== "live";
-  browseMain.hidden = next !== "browse";
-  livePills.hidden = next !== "live";
+  if (liveMain) liveMain.hidden = next !== "live";
+  if (browseMain) browseMain.hidden = next !== "browse";
+  if (livePills) livePills.hidden = next !== "live";
   if (next === "browse") {
     loadDatasets().catch((e) => toast(String(e.message || e)));
   }
@@ -806,29 +808,40 @@ document.querySelectorAll(".mode-tab").forEach((btn) => {
   btn.addEventListener("click", () => setMode(btn.dataset.mode || "live"));
 });
 
-document.getElementById("browse-refresh").addEventListener("click", () => {
-  loadDatasets().catch((e) => toast(String(e.message || e)));
-});
+const browseRefresh = document.getElementById("browse-refresh");
+if (browseRefresh) {
+  browseRefresh.addEventListener("click", () => {
+    loadDatasets().catch((e) => toast(String(e.message || e)));
+  });
+}
 
-datasetSelect.addEventListener("change", () => {
-  loadDataset(datasetSelect.value).catch((e) => toast(String(e.message || e)));
-});
+if (datasetSelect) {
+  datasetSelect.addEventListener("change", () => {
+    loadDataset(datasetSelect.value).catch((e) => toast(String(e.message || e)));
+  });
+}
 
-tagFilterEl.addEventListener("input", () => renderEpisodeTable());
+if (tagFilterEl) {
+  tagFilterEl.addEventListener("input", () => renderEpisodeTable());
+}
 
-compareToggle.addEventListener("change", () => {
-  updateCompareMeta();
-  if (!compareToggle.checked) {
-    compareB = null;
-    paneB.hidden = true;
-    panes.b = null;
-    paneB.replaceChildren();
-    if (selectedIndex != null) {
-      loadPane("a", selectedIndex);
+if (compareToggle) {
+  compareToggle.addEventListener("change", () => {
+    updateCompareMeta();
+    if (!compareToggle.checked) {
+      compareB = null;
+      if (paneB) {
+        paneB.hidden = true;
+        panes.b = null;
+        paneB.replaceChildren();
+      }
+      if (selectedIndex != null) {
+        loadPane("a", selectedIndex);
+      }
     }
-  }
-  renderEpisodeTable();
-});
+    renderEpisodeTable();
+  });
+}
 
 // Physical Keyboard Listener
 document.addEventListener("keydown", (e) => {
