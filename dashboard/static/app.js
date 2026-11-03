@@ -14,7 +14,7 @@ const camMeta = document.getElementById("cam-meta");
 const toastEl = document.getElementById("toast");
 const jointsEl = document.getElementById("joints");
 const jointsMeta = document.getElementById("joints-meta");
-const jointsPanel = document.querySelector(".panel.joints");
+const jointsPanel = document.querySelector(".panel.joints, #win-joints");
 const liveMain = document.getElementById("live-main");
 const browseMain = document.getElementById("browse-main");
 const livePills = document.getElementById("live-pills");
@@ -163,8 +163,9 @@ async function refreshJoints() {
 
 // ---------------------- CAMERA STREAMS ---------------------- //
 
-/** Dynamically render MJPEG feeds for D405 Left, D405 Right, and RGB Overview */
+/** Dynamically render MJPEG feeds from /api/status stream catalog (camera.env). */
 function renderStreams(streams) {
+  if (!camsEl) return;
   const key = (streams || []).map((s) => `${s.id}:${s.live}`).join("|");
   if (key === streamKey) return;
   streamKey = key;
@@ -175,8 +176,8 @@ function renderStreams(streams) {
     const empty = document.createElement("div");
     empty.className = "cam-slot waiting";
     empty.innerHTML = `
-      <div class="panel-h"><h1>No Cameras Active</h1></div>
-      <div class="stage empty-hint">Check /dev/video* devices or config/camera.env</div>`;
+      <span class="cam-hud-tag">OFFLINE</span>
+      <div class="stage empty-hint">No streams yet — check config/camera.env and the Omen publisher</div>`;
     camsEl.appendChild(empty);
     return;
   }
@@ -186,30 +187,25 @@ function renderStreams(streams) {
     slot.className = `cam-slot ${s.kind || "rgb"} ${s.live ? "live" : "waiting"}`;
     slot.dataset.stream = s.id;
 
-    // RUI HUD overlay tags
-    const typeTag = s.id.includes("d405")
-      ? "D405"
-      : s.id.includes("depth")
-      ? "Z16 DEPTH"
-      : "RGB OVERVIEW";
+    const kind =
+      s.kind === "depth" || String(s.id).includes("depth")
+        ? "Z16"
+        : String(s.id).includes("d405") || s.id === "wrist" || s.id === "base"
+          ? "D405"
+          : "RGB";
+    const status = s.live ? "LIVE" : "OFFLINE";
+    const label = s.label || s.id;
 
     slot.innerHTML = `
-      <div class="live-badge">
-        <span>${s.live ? "LIVE" : "OFFLINE"}</span>
-        <span style="opacity:0.6">| ${typeTag}</span>
-      </div>
+      <span class="cam-hud-tag">${status} · ${kind} · ${label}</span>
       <div class="stage">
-        <img 
-          src="${s.url}?t=${Date.now()}" 
-          alt="${s.label || s.id}" 
+        <img
+          src="${s.url}?t=${Date.now()}"
+          alt="${label}"
           loading="eager"
-          onerror="this.style.opacity='0.3'"
+          onerror="this.style.opacity='0.35'"
           onload="this.style.opacity='1'"
         />
-      </div>
-      <div class="panel-h" style="border-top:1px solid var(--border-line); border-bottom:none;">
-        <h1>${s.label || s.id}</h1>
-        <span class="muted" style="font-family:var(--font-mono); font-size:10px;">${s.id}</span>
       </div>`;
 
     camsEl.appendChild(slot);
@@ -273,7 +269,7 @@ async function refresh() {
       row("Active Routine", s.last_banner || "Idle Standby"),
     ];
 
-    hwEl.replaceChildren(...rows);
+    if (hwEl) hwEl.replaceChildren(...rows);
   } catch {
     if (omenEl) {
       omenEl.textContent = "SERVER DOWN";

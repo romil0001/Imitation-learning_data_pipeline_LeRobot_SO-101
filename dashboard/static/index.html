@@ -357,6 +357,20 @@
             color: var(--primary-cyan);
             z-index: 10;
             border: 1px solid rgba(255,255,255,0.1);
+            max-width: calc(100% - 12px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cam-slot.live { border-color: rgba(63, 185, 80, 0.55); }
+        .cam-slot.waiting { border-color: var(--border-panel); opacity: 0.85; }
+        .cam-slot.waiting .cam-hud-tag { color: var(--text-muted); }
+        .cam-slot.live .cam-hud-tag { color: var(--status-ok); }
+        .cam-slot .stage.empty-hint {
+            color: var(--text-muted);
+            font-size: 12px;
+            padding: 16px;
+            text-align: center;
         }
 
         /* ---------------- JOINT TELEMETRY BARS ---------------- */
@@ -516,18 +530,10 @@
 
             <button id="firefox-status-pill" onclick="showBrowserWarning()" style="display:none;" class="status-btn">⚠️ Chrome Recommended</button>
 
-            <span>FPS:
-                <select id="fps-select" class="status-select" onchange="setTargetFps(this.value)">
-                    <option value="0" selected>Max (30)</option>
-                    <option value="25">25</option>
-                    <option value="15">15</option>
-                    <option value="5">5</option>
-                </select>
-            </span>
-
-            <button class="status-btn" onclick="snapshotAllCameras()">📸 Snapshot</button>
-            <button class="status-btn" id="record-btn" onclick="toggleRecording()">🔴 Tab Record</button>
-            <button class="status-btn" id="alert-bell" onclick="toggleAlertPanel()">🔔 Alerts<span class="badge" id="alert-badge" style="display:none;">0</span></button>
+            <button class="status-btn" onclick="snapshotAllCameras()">Snapshot</button>
+            <button class="status-btn" id="episode-btn" onclick="sendEpisodeKey()" title="Forward Space to record/eval/dagger">Record Episode</button>
+            <button class="status-btn" id="record-btn" onclick="toggleRecording()" title="Browser tab capture (WebM)">Tab Capture</button>
+            <button class="status-btn" id="alert-bell" onclick="toggleAlertPanel()">Alerts<span class="badge" id="alert-badge" style="display:none;">0</span></button>
         </div>
     </div>
 
@@ -547,18 +553,10 @@
             </div>
             <div class="window-content" style="padding: 4px; background:#000;">
                 <div class="cams-grid" id="cams">
-                    <!-- Dynamically populated by app.js -->
-                    <div class="cam-slot">
-                        <span class="cam-hud-tag">D405 Left (Wrist)</span>
-                        <div class="stage"><img src="/mjpeg/d405_left" alt="D405 Left" onerror="this.src=''"/></div>
-                    </div>
-                    <div class="cam-slot">
-                        <span class="cam-hud-tag">D405 Right (Wrist)</span>
-                        <div class="stage"><img src="/mjpeg/d405_right" alt="D405 Right" onerror="this.src=''"/></div>
-                    </div>
-                    <div class="cam-slot">
-                        <span class="cam-hud-tag">Overview RGB</span>
-                        <div class="stage"><img src="/mjpeg/overview_rgb" alt="Overview" onerror="this.src=''"/></div>
+                    <!-- Populated by app.js from /api/status (camera.env stream catalog) -->
+                    <div class="cam-slot waiting">
+                        <span class="cam-hud-tag">Scanning…</span>
+                        <div class="stage empty-hint">Waiting for ZMQ / local camera streams</div>
                     </div>
                 </div>
             </div>
@@ -744,7 +742,28 @@
             p.style.display = p.style.display === 'block' ? 'none' : 'block';
         }
 
-        // Tab Screen Recording (from RoboticsUI)
+        async function sendEpisodeKey() {
+            try {
+                const r = await fetch('/api/key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: ' ' }),
+                });
+                const j = await r.json().catch(() => ({}));
+                const toastEl = document.getElementById('toast');
+                if (toastEl) {
+                    toastEl.hidden = false;
+                    toastEl.textContent = r.ok
+                        ? (j.listening ? 'Sent SPACE to active process' : 'Queued SPACE (no record/eval listening yet)')
+                        : (j.detail || 'Key rejected');
+                    setTimeout(() => { toastEl.hidden = true; }, 2500);
+                }
+            } catch (err) {
+                console.error('episode key failed', err);
+            }
+        }
+
+        // Optional browser tab capture (WebM download) — separate from SO-101 episode record
         let mediaRecorder = null, recordedChunks = [];
         async function toggleRecording() {
             const btn = document.getElementById('record-btn');

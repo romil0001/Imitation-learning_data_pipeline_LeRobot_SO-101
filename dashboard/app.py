@@ -410,7 +410,8 @@ def api_status():
         "v1": True,
         "hint": (
             "Dashboard streams every RGB/depth view from camera.env; joints while record/eval. "
-            "Offline tiles mean that key is missing from the local USB index configurations."
+            "Offline tiles mean that stream key is missing from the Omen ZMQ packet "
+            "(or the local OpenCV camera index map when CAMERA_BACKEND=opencv)."
         ),
     }
 
