@@ -421,6 +421,96 @@ def api_joints():
     return data
 
 
+def _open_browse_dataset(name: str):
+    from dashboard.browse import resolve_dataset_dir
+    from so101.dataset import SO101Dataset
+
+    try:
+        path = resolve_dataset_dir(ROOT, name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return SO101Dataset(path)
+
+
+@app.get("/api/datasets")
+def api_datasets():
+    from dashboard.browse import list_datasets
+
+    return {"datasets": list_datasets(ROOT)}
+
+
+@app.get("/api/datasets/{name}")
+def api_dataset(name: str):
+    from dashboard.browse import dataset_detail
+
+    return dataset_detail(_open_browse_dataset(name))
+
+
+@app.get("/api/datasets/{name}/episodes/{index}")
+def api_episode(name: str, index: int):
+    from dashboard.browse import episode_detail
+
+    ds = _open_browse_dataset(name)
+    try:
+        return episode_detail(ds, index, dataset_name=name)
+    except (IndexError, FileNotFoundError) as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@app.get("/api/datasets/{name}/episodes/{index}/joints")
+def api_episode_joints(name: str, index: int):
+    from dashboard.browse import episode_joints
+
+    ds = _open_browse_dataset(name)
+    try:
+        return episode_joints(ds, index)
+    except (IndexError, FileNotFoundError) as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@app.get("/api/datasets/{name}/episodes/{index}/files")
+def api_episode_files(name: str, index: int):
+    from dashboard.browse import episode_file_inventory
+    from so101.dataset.reader import episode_dir
+
+    ds = _open_browse_dataset(name)
+    if index < 0 or index >= ds.meta.episode_count:
+        raise HTTPException(status_code=404, detail=f"episode {index} out of range")
+    folder = episode_dir(ds.root, index)
+    if not folder.is_dir():
+        raise HTTPException(status_code=404, detail=f"episode folder missing: {index}")
+    return {"index": index, "files": episode_file_inventory(folder)}
+
+
+@app.get("/api/datasets/{name}/episodes/{index}/video/{camera_name}")
+def api_episode_video(name: str, index: int, camera_name: str):
+    from dashboard.browse import video_path
+
+    ds = _open_browse_dataset(name)
+    try:
+        path = video_path(ds, index, camera_name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return FileResponse(path, media_type="video/mp4", filename=path.name)
+
+
+@app.get("/api/datasets/{name}/episodes/{index}/depth/{camera_name}/frame/{frame}")
+def api_episode_depth_frame(name: str, index: int, camera_name: str, frame: int):
+    from dashboard.browse import depth_frame_png
+    from fastapi.responses import Response
+
+    ds = _open_browse_dataset(name)
+    try:
+        png = depth_frame_png(ds, index, camera_name, frame)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except IndexError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return Response(content=png, media_type="image/png")
+
+
 class KeyBody(BaseModel):
     key: str = Field(..., min_length=1, max_length=8)
 

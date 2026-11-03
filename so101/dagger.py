@@ -48,6 +48,7 @@ def run_dagger_loop(
     sync_steps: int = 40,
     sync_dt: float = 0.04,
     sleep: Callable[[float], None] = time.sleep,
+    episode_tags: list[str] | tuple[str, ...] | None = None,
 ) -> int:
     """Collect correction episodes. Returns how many were saved.
 
@@ -59,6 +60,7 @@ def run_dagger_loop(
     saved = 0
     writer: EpisodeWriter | None = None
     hold_q: np.ndarray | None = None
+    tags = list(episode_tags or ())
     policy.reset()
     print(
         "HG-DAgger  p=pause (leader moves to follower)  c=record correction  "
@@ -121,6 +123,7 @@ def run_dagger_loop(
                     dataset.next_episode_index(),
                     source="dagger",
                     intervention=True,
+                    tags=tags,
                 )
             phase = "correct"
             print("Recording correction. n=save  r=discard  p=resume policy", flush=True)
@@ -295,6 +298,8 @@ def dagger_from_env(
         rest_pose = home
         print(f"Moving follower to demo start pose {list(home)}", flush=True)
         interpolate_to_qpos(follower, home, n_steps=80, dt=0.04, sleep=time.sleep)
+        from so101.dataset.tags import dagger_tags
+
         with OperatorKeys(allowed={"p", "c", "n", "r", "q", " "}) as op_keys:
             saved = run_dagger_loop(
                 dataset=dataset,
@@ -309,6 +314,7 @@ def dagger_from_env(
                 depth_camera_name=depth_name,
                 sync_steps=sync_steps,
                 sync_dt=sync_dt,
+                episode_tags=dagger_tags(policy, policy_base),
             )
     except KeyboardInterrupt:
         print("\nCtrl-C — parking follower before disconnect.", flush=True)

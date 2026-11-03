@@ -20,11 +20,13 @@ class EpisodeWriter:
         *,
         source: str = "teleop",
         intervention: bool = False,
+        tags: list[str] | tuple[str, ...] | None = None,
     ) -> None:
         self.dataset = dataset
         self.index = index
         self.source = source
         self.intervention = intervention
+        self.tags = tuple(str(t) for t in (tags or ()) if str(t).strip())
         self._names = self.dataset.meta.names()
         self._depth_names = self.dataset.meta.depth_names()
         self._states: list[np.ndarray] = []
@@ -134,6 +136,7 @@ class EpisodeWriter:
             task=self.dataset.meta.task,
             source=self.source,
             intervention=self.intervention,
+            tags=self.tags,
         )
         (folder / "episode.json").write_text(json.dumps(emeta.to_dict(), indent=2) + "\n")
         new_count = max(self.dataset.meta.episode_count, self.index + 1)

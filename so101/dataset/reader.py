@@ -81,6 +81,7 @@ class SO101Dataset:
             depth_paths=depth_paths or None,
             source=emeta.source,
             intervention=emeta.intervention,
+            tags=emeta.tags,
         )
 
 

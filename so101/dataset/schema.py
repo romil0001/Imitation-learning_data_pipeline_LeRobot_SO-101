@@ -87,18 +87,24 @@ class EpisodeMeta:
     task: str
     source: str = "teleop"
     intervention: bool = False
+    tags: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["tags"] = list(self.tags)
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EpisodeMeta:
+        raw_tags = data.get("tags") or ()
+        tags = tuple(str(t) for t in raw_tags)
         return cls(
             index=int(data["index"]),
             num_frames=int(data["num_frames"]),
             task=str(data["task"]),
             source=str(data.get("source", "teleop")),
             intervention=bool(data.get("intervention", False)),
+            tags=tags,
         )
 
 
@@ -117,6 +123,7 @@ class Episode:
     depth_paths: dict[str, Path] | None = None
     source: str = "teleop"
     intervention: bool = False
+    tags: tuple[str, ...] = ()
 
     def load_frames(self, camera_name: str | None = None) -> Any:
         from so101.dataset.video import read_mp4

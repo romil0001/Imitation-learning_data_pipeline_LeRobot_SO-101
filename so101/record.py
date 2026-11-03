@@ -44,7 +44,10 @@ def run_record_loop(
     saved = 0
     phase = "record"
     index = dataset.next_episode_index()
-    writer = EpisodeWriter(dataset, index)
+    from so101.dataset.tags import collection_tags
+
+    tags = collection_tags()
+    writer = EpisodeWriter(dataset, index, tags=tags)
     print(f"Recording episode {index:06d}  n=save  r=redo  q=quit", flush=True)
 
     while True:
@@ -92,7 +95,7 @@ def run_record_loop(
                 print("Reset the scene, then press n for the next episode (q to stop)", flush=True)
             elif key == "r":
                 writer.abort()
-                writer = EpisodeWriter(dataset, index)
+                writer = EpisodeWriter(dataset, index, tags=tags)
                 print(f"Redo episode {index:06d}", flush=True)
             elif key == "q":
                 writer.abort()
@@ -101,7 +104,7 @@ def run_record_loop(
         else:
             if key == "n":
                 index = dataset.next_episode_index()
-                writer = EpisodeWriter(dataset, index)
+                writer = EpisodeWriter(dataset, index, tags=tags)
                 phase = "record"
                 print(f"Recording episode {index:06d}  n=save  r=redo  q=quit", flush=True)
             elif key == "q":

@@ -186,7 +186,15 @@ def replay_capture_from_env(
             print(f"Homing to episode {ep_i} start …", flush=True)
             interpolate_to_qpos(follower, ep.state[0], n_steps=60, dt=0.04, sleep=time.sleep)
             out_i = dest.next_episode_index()
-            writer = EpisodeWriter(dest, out_i, source="replay_capture", intervention=False)
+            from so101.dataset.tags import replay_capture_tags
+
+            writer = EpisodeWriter(
+                dest,
+                out_i,
+                source="replay_capture",
+                intervention=False,
+                tags=replay_capture_tags(),
+            )
             print(f"Replaying src={ep_i} → dest={out_i} frames={ep.num_frames}", flush=True)
             try:
                 n = replay_capture_episode(

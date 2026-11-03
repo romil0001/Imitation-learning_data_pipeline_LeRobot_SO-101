@@ -8,7 +8,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from so101.dataset import JOINT_NAMES, DatasetMeta, EpisodeWriter, SO101Dataset, compute_stats, write_stats
+from so101.dataset import (
+    JOINT_NAMES,
+    DatasetMeta,
+    EpisodeWriter,
+    SO101Dataset,
+    collection_tags,
+    compute_stats,
+    effective_tags,
+    write_stats,
+)
 
 
 def _rgb_frame(h: int, w: int, value: int) -> np.ndarray:
@@ -67,6 +76,40 @@ def test_episode_writer_roundtrip(tmp_path: Path) -> None:
     frames = ep.load_frames()
     assert frames.shape == (n, 48, 64, 3)
     assert frames.dtype == np.uint8
+
+
+def test_episode_writer_persists_tags(tmp_path: Path) -> None:
+    meta = DatasetMeta(
+        name="unit_demo",
+        fps=15,
+        joint_names=list(JOINT_NAMES),
+        camera_name="front",
+        camera_width=32,
+        camera_height=24,
+        task="Pick pen",
+        episode_count=0,
+    )
+    ds = SO101Dataset.create(tmp_path, meta)
+    tags = collection_tags()
+    writer = EpisodeWriter(ds, index=0, tags=tags)
+    writer.add_frame(
+        np.zeros(6, np.float32),
+        np.ones(6, np.float32),
+        0.0,
+        image_rgb=_rgb_frame(24, 32, 3),
+    )
+    writer.save()
+    raw = json.loads((tmp_path / "episodes" / "000000" / "episode.json").read_text())
+    assert raw["tags"] == tags
+    ep = SO101Dataset(tmp_path).load_episode(0)
+    assert list(ep.tags) == tags
+    assert "success_collection" in effective_tags(ep.tags, source=ep.source, intervention=ep.intervention)
+
+
+def test_effective_tags_derive_for_legacy_episodes() -> None:
+    assert "method_teleop" in effective_tags([], source="teleop", intervention=False)
+    assert "method_dagger" in effective_tags([], source="dagger", intervention=True)
+    assert "intervention" in effective_tags([], source="dagger", intervention=True)
 
 
 def test_episode_writer_two_cameras(tmp_path: Path) -> None:

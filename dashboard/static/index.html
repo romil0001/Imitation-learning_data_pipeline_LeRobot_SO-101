@@ -12,14 +12,18 @@
       <span class="mark">SO-101</span>
       <span class="sub">Visuomotor Manipulation Lab · romil0001</span>
     </div>
-    <div class="pills">
+    <nav class="mode-tabs" aria-label="Dashboard mode">
+      <button type="button" class="mode-tab active" data-mode="live" id="tab-live">Live</button>
+      <button type="button" class="mode-tab" data-mode="browse" id="tab-browse">Browse</button>
+    </nav>
+    <div class="pills" id="live-pills">
       <span id="state" class="pill idle">IDLE</span>
       <span id="timer" class="timer">00:00.0</span>
       <span id="omen-pill" class="pill ghost">OMEN …</span>
     </div>
   </header>
 
-  <main class="grid">
+  <main class="grid" id="live-main">
     <section class="panel cam">
       <div class="panel-h">
         <h1>Live streams</h1>
@@ -76,6 +80,49 @@
         <span class="muted">outputs/session.log</span>
       </div>
       <pre id="log"></pre>
+    </section>
+  </main>
+
+  <main class="browse" id="browse-main" hidden>
+    <section class="panel browse-nav">
+      <div class="panel-h">
+        <h1>Datasets</h1>
+        <button type="button" class="btn" id="browse-refresh">Refresh</button>
+      </div>
+      <label class="field">
+        <span class="muted">Dataset</span>
+        <select id="dataset-select"></select>
+      </label>
+      <label class="field">
+        <span class="muted">Filter tags</span>
+        <input id="tag-filter" type="text" placeholder="e.g. method_teleop success_collection" />
+      </label>
+      <div id="tag-chips" class="tag-chips"></div>
+      <div class="compare-bar">
+        <label class="check"><input type="checkbox" id="compare-toggle" /> Compare mode</label>
+        <label class="check"><input type="checkbox" id="shared-scrub" checked /> Shared scrubber</label>
+        <span id="compare-meta" class="muted">Pick A then B in the table</span>
+      </div>
+      <div class="table-wrap">
+        <table class="ep-table" id="episode-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>#</th>
+              <th>Frames</th>
+              <th>Dur</th>
+              <th>Source</th>
+              <th>Tags</th>
+            </tr>
+          </thead>
+          <tbody id="episode-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="browse-view" id="browse-view">
+      <div class="browse-pane" id="pane-a" data-pane="a"></div>
+      <div class="browse-pane" id="pane-b" data-pane="b" hidden></div>
     </section>
   </main>
 

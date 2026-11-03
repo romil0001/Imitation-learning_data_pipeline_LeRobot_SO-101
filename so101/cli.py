@@ -26,9 +26,13 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         print(stats_path.read_text())
     for i in range(ds.meta.episode_count):
         ep = ds.load_episode(i)
+        from so101.dataset.tags import effective_tags
+
+        tags = effective_tags(ep.tags, source=ep.source, intervention=ep.intervention)
         print(
             f"episode {i:06d}  frames={ep.num_frames}  "
             f"source={ep.source}  intervention={ep.intervention}  "
+            f"tags={tags}  "
             f"videos={sorted((ep.video_paths or {ep.camera_name: ep.video_path}).keys())}"
             + (f"  depth={ep.depth_path.name}" if ep.depth_path else "")
         )
