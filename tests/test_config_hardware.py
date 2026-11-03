@@ -7,7 +7,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from so101.config import CameraSettings, PortsConfig, load_camera, load_cameras, load_env_file, load_ports, project_root
+from so101.config import (
+    CameraSettings,
+    PortsConfig,
+    load_camera,
+    load_cameras,
+    load_env_file,
+    load_ports,
+    project_root,
+    resolve_zmq_host,
+    zmq_host_candidates,
+    zmq_link_mode,
+)
 from so101.dataset.schema import JOINT_NAMES
 from so101.hardware import action_dict_from_qpos, camera_config_dict, qpos_from_obs, rgb_from_obs
 
@@ -55,12 +66,54 @@ def test_load_ports_ok(tmp_path: Path) -> None:
     assert ports.follower_bus_retries == 8
 
 
-def test_load_camera_zmq_rejects_placeholder() -> None:
+def test_load_camera_zmq_rejects_placeholder(tmp_path: Path) -> None:
+    path = tmp_path / "camera.env"
+    path.write_text(
+        "CAMERA_BACKEND=zmq\n"
+        "ZMQ_HOST=CHANGE_ME_OMEN_LAN_IP\n"
+        "ZMQ_PORT=5555\n"
+        "CAMERA_NAME=front\n"
+        "CAMERA_WIDTH=640\n"
+        "CAMERA_HEIGHT=480\n"
+        "CAMERA_FPS=15\n"
+    )
     with pytest.raises(ValueError, match="ZMQ_HOST"):
-        load_camera(ROOT / "config" / "camera.env.example")
+        load_camera(path)
 
 
-def test_load_camera_zmq_ok(tmp_path: Path) -> None:
+def test_zmq_host_candidates_prefer_hosts_list() -> None:
+    assert zmq_host_candidates({"ZMQ_HOSTS": "192.168.2.2, 192.168.0.59", "ZMQ_HOST": "10.0.0.1"}) == [
+        "192.168.2.2",
+        "192.168.0.59",
+    ]
+    assert zmq_host_candidates({"ZMQ_HOST": "192.168.0.59"}) == ["192.168.0.59"]
+
+
+def test_resolve_zmq_host_picks_first_reachable(monkeypatch: pytest.MonkeyPatch) -> None:
+    env = {"ZMQ_HOSTS": "192.168.2.2,192.168.0.59", "ZMQ_PORT": "5555"}
+
+    def _reach(host: str, port: int, timeout: float = 0.35) -> bool:
+        del port, timeout
+        return host == "192.168.0.59"
+
+    monkeypatch.setattr("so101.config.tcp_reachable", _reach)
+    assert resolve_zmq_host(env) == "192.168.0.59"
+
+
+def test_resolve_zmq_host_falls_back_to_first_when_none_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    env = {"ZMQ_HOSTS": "192.168.2.2,192.168.0.59", "ZMQ_PORT": "5555"}
+    monkeypatch.setattr("so101.config.tcp_reachable", lambda *_a, **_k: False)
+    assert resolve_zmq_host(env) == "192.168.2.2"
+
+
+def test_zmq_link_mode_ethernet_vs_wifi() -> None:
+    env = {"ZMQ_HOSTS": "192.168.2.2,192.168.0.59"}
+    assert zmq_link_mode("192.168.2.2", env) == "ethernet"
+    assert zmq_link_mode("192.168.0.59", env) == "wifi"
+    assert zmq_link_mode("10.0.0.5", {}) == "lan"
+
+
+def test_load_camera_zmq_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "camera.env"
     path.write_text(
         "CAMERA_BACKEND=zmq\n"
@@ -72,6 +125,7 @@ def test_load_camera_zmq_ok(tmp_path: Path) -> None:
         "CAMERA_FPS=15\n"
         "CAMERA_USE_DEPTH=false\n"
     )
+    monkeypatch.setattr("so101.config.tcp_reachable", lambda *_a, **_k: False)
     cam = load_camera(path)
     assert isinstance(cam, CameraSettings)
     assert cam.backend == "zmq"

@@ -32,13 +32,20 @@ fi
 if [[ ! -f "$CAM_ENV" ]]; then
   cp "$ROOT/config/camera.env.example" "$CAM_ENV"
 fi
+WIFI_IP="${OMEN_WIFI_IP:-192.168.0.59}"
+HOSTS_LINE="ZMQ_HOSTS=$OMEN_IP,$WIFI_IP"
+if grep -q '^ZMQ_HOSTS=' "$CAM_ENV"; then
+  sed -i.bak "s/^ZMQ_HOSTS=.*/$HOSTS_LINE/" "$CAM_ENV"
+else
+  printf '\n%s\n' "$HOSTS_LINE" >>"$CAM_ENV"
+fi
 if grep -q '^ZMQ_HOST=' "$CAM_ENV"; then
   sed -i.bak "s/^ZMQ_HOST=.*/ZMQ_HOST=$OMEN_IP/" "$CAM_ENV"
-  rm -f "$CAM_ENV.bak"
 else
-  printf '\nZMQ_HOST=%s\n' "$OMEN_IP" >>"$CAM_ENV"
+  printf 'ZMQ_HOST=%s\n' "$OMEN_IP" >>"$CAM_ENV"
 fi
-echo "Updated $CAM_ENV → ZMQ_HOST=$OMEN_IP"
+rm -f "$CAM_ENV.bak"
+echo "Updated $CAM_ENV → $HOSTS_LINE (Ethernet first, Wi-Fi fallback)"
 
 echo
 echo "Next on the Omen: run omen\\setup_ethernet_link.bat then omen\\run_publish.bat"

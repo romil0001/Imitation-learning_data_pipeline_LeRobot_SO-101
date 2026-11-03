@@ -239,18 +239,41 @@ async function refresh() {
       camMeta.textContent = `${cam.backend.toUpperCase()} · ${nLive}/${streams.length || 0} LIVE · ${cam.fps ?? 0} FPS`;
     }
 
-    // 3. Controller / Bridge Pill
+    // 3. Controller / Bridge Pill — include Ethernet vs Wi-Fi link mode
+    const linkMode = String(cam.link_mode || "unknown").toLowerCase();
+    const linkLabel =
+      linkMode === "ethernet"
+        ? "ETHERNET"
+        : linkMode === "wifi"
+          ? "WIFI"
+          : linkMode === "local"
+            ? "LOCAL"
+            : linkMode === "lan"
+              ? "LAN"
+              : "LINK";
     if (omenEl) {
-      omenEl.textContent = cam.reachable ? "FEED ONLINE" : "FEED DISCONNECTED";
-      omenEl.className = `pill status-pill ${cam.reachable ? "ok" : "bad"}`;
+      if (cam.reachable) {
+        omenEl.textContent = `${linkLabel} · ONLINE`;
+        omenEl.className = "pill status-pill ok";
+      } else {
+        omenEl.textContent = `${linkLabel} · DISCONNECTED`;
+        omenEl.className = "pill status-pill bad";
+      }
+      omenEl.title = cam.host
+        ? `ZMQ ${cam.host}:${cam.port || 5555} (${linkMode})`
+        : linkMode;
     }
 
     // 4. Detailed Telemetry Rows
     const arms = s.arms || {};
     const ageStr = cam.last_frame_age_s != null ? `${cam.last_frame_age_s}s` : "—";
     const depthActive = (cam.depth_live || []).length > 0;
+    const linkDetail = cam.host
+      ? `${linkLabel} → ${cam.host}:${cam.port || 5555}`
+      : linkLabel;
 
     const rows = [
+      row("Live Link", linkDetail, cam.reachable || linkMode === "local"),
       row("Camera Engine", `${cam.backend.toUpperCase()} (Port ${cam.port || 8080})`, cam.reachable),
       row("Active Feeds", `${(cam.live_ids || []).length} / ${streams.length || 0} online`, (cam.live_ids || []).length > 0),
       row("Frame Latency", ageStr, cam.last_frame_age_s != null && cam.last_frame_age_s < 2.0),

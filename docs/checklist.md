@@ -25,7 +25,7 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 ## Two machines
 - [ ] **Mac:** leader + follower USB (motor boards can share USB 2)
 - [ ] **HP Omen:** D405 (wrist) on USB 3; USB webcam (overhead)
-- [ ] Camera link: **prefer USB-Ethernet** (`omen\setup_ethernet_link.bat` + `bash scripts/21_use_ethernet_link.sh` → `ZMQ_HOST=192.168.2.2`) or same Wi-Fi with Omen `ipconfig` IPv4 in Mac `config/camera.env`
+- [ ] Camera link: `ZMQ_HOSTS=192.168.2.2,192.168.0.59` (Ethernet then Wi-Fi; auto-picked at startup). USB-Ethernet setup: `omen\setup_ethernet_link.bat` + `bash scripts/21_use_ethernet_link.sh`
 - [ ] Mac `config/camera.env` has `CAMERA_NAMES=wrist,overhead,base` and `CAMERA_USE_DEPTH=true`
 - [ ] Windows Firewall allows inbound TCP **5555** (Ethernet script adds the rule)
 - [ ] Do **not** train on the 4 GB Omen (train ACT on the Mac with MPS)

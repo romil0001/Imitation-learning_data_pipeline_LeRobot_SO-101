@@ -41,6 +41,8 @@ BANNER_RE = re.compile(r"===== (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (\S+) =====
 CFG: dict[str, str] = {
     "backend": "opencv",  # Default to local capture if ZMQ isn't running
     "zmq_host": "",
+    "zmq_hosts": "",
+    "link_mode": "unknown",
     "zmq_port": "5555",
     "camera_name": "d405_left",
     "camera_names": "d405_left,d405_right,overview_rgb",
@@ -101,9 +103,23 @@ def depth_camera_names(rgb_names: list[str] | None = None) -> list[str]:
 def apply_camera_env() -> None:
     env = load_env_file(Path(os.environ.get("CAMERA_FILE", ROOT / "config" / "camera.env")))
     CFG["backend"] = env.get("CAMERA_BACKEND", "opencv")
-    CFG["zmq_host"] = env.get("ZMQ_HOST", "")
     CFG["zmq_port"] = env.get("ZMQ_PORT", "5555")
-    
+    if CFG["backend"] == "zmq":
+        try:
+            from so101.config import resolve_zmq_host, zmq_host_candidates, zmq_link_mode
+
+            CFG["zmq_host"] = resolve_zmq_host(env, port=int(CFG["zmq_port"] or "5555"))
+            CFG["zmq_hosts"] = ",".join(zmq_host_candidates(env))
+            CFG["link_mode"] = zmq_link_mode(CFG["zmq_host"], env)
+        except ValueError:
+            CFG["zmq_host"] = env.get("ZMQ_HOST", "")
+            CFG["zmq_hosts"] = env.get("ZMQ_HOSTS", "")
+            CFG["link_mode"] = "unknown"
+    else:
+        CFG["zmq_host"] = env.get("ZMQ_HOST", "")
+        CFG["zmq_hosts"] = ""
+        CFG["link_mode"] = "local"
+
     names = env.get("CAMERA_NAMES", "").strip()
     if names:
         CFG["camera_names"] = names
@@ -395,7 +411,9 @@ def api_status():
             "names": names,
             "depth_names": depth_camera_names(names),
             "host": host,
+            "hosts": CFG.get("zmq_hosts") or host,
             "port": port,
+            "link_mode": CFG.get("link_mode") or "unknown",
             "reachable": tcp_ok(host, port) if CFG["backend"] == "zmq" else age is not None and age < 3,
             "last_frame_age_s": age,
             "fps": round(_stats["fps"], 1),

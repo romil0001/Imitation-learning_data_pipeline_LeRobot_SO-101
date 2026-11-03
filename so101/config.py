@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,70 @@ def load_env_file(path: Path) -> dict[str, str]:
         key, value = line.split("=", 1)
         out[key.strip()] = value.strip().strip('"').strip("'")
     return out
+
+
+def zmq_host_candidates(env: dict[str, str]) -> list[str]:
+    """Ordered ZMQ hosts: ZMQ_HOSTS (comma list) else ZMQ_HOST. Skips CHANGE_ME."""
+    raw = env.get("ZMQ_HOSTS", "").strip()
+    if raw:
+        hosts = [part.strip() for part in raw.split(",") if part.strip()]
+    else:
+        single = env.get("ZMQ_HOST", "").strip()
+        hosts = [single] if single else []
+    return [h for h in hosts if h and not h.startswith("CHANGE_ME")]
+
+
+def tcp_reachable(host: str, port: int, timeout: float = 0.35) -> bool:
+    if not host or host.startswith("CHANGE_ME"):
+        return False
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def resolve_zmq_host(
+    env: dict[str, str],
+    *,
+    port: int | None = None,
+    timeout: float = 0.35,
+) -> str:
+    """Pick first reachable host from ZMQ_HOSTS / ZMQ_HOST; else first candidate.
+
+    Startup-only failover: Ethernet listed before Wi-Fi in ZMQ_HOSTS.
+    """
+    candidates = zmq_host_candidates(env)
+    if not candidates:
+        raise ValueError(
+            "Set ZMQ_HOST or ZMQ_HOSTS (e.g. 192.168.2.2,192.168.0.59) to the HP Omen IP(s)"
+        )
+    p = int(port if port is not None else env.get("ZMQ_PORT", "5555") or "5555")
+    for host in candidates:
+        if tcp_reachable(host, p, timeout=timeout):
+            return host
+    return candidates[0]
+
+
+def zmq_link_mode(host: str, env: dict[str, str] | None = None) -> str:
+    """Classify active ZMQ path for the dashboard: ethernet | wifi | lan | unknown.
+
+    Convention: first entry in ZMQ_HOSTS is the direct Ethernet link; later entries
+    are Wi-Fi / other LAN. Falls back to 192.168.2.x ⇒ ethernet.
+    """
+    if not host or host.startswith("CHANGE_ME"):
+        return "unknown"
+    candidates = zmq_host_candidates(env or {})
+    if candidates:
+        if host == candidates[0]:
+            return "ethernet"
+        if host in candidates[1:]:
+            return "wifi"
+    if host.startswith("192.168.2."):
+        return "ethernet"
+    if host.startswith("192.168."):
+        return "wifi"
+    return "lan"
 
 
 def _as_bool(value: str, default: bool = False) -> bool:
@@ -91,10 +156,15 @@ def load_cameras(path: Path | None = None) -> list[CameraSettings]:
     path = path or Path(project_root() / "config" / "camera.env")
     env = load_env_file(path)
     backend = env.get("CAMERA_BACKEND", "opencv")
-    host = env.get("ZMQ_HOST", "")
     serial = env.get("CAMERA_SERIAL", "")
-    if backend == "zmq" and (not host or host.startswith("CHANGE_ME")):
-        raise ValueError(f"Set ZMQ_HOST in {path} to the HP Omen LAN IP")
+    zmq_port = int(env.get("ZMQ_PORT", "5555"))
+    if backend == "zmq":
+        try:
+            host = resolve_zmq_host(env, port=zmq_port)
+        except ValueError as exc:
+            raise ValueError(f"{exc} (in {path})") from exc
+    else:
+        host = env.get("ZMQ_HOST", "")
     if backend == "intelrealsense" and (not serial or serial.startswith("CHANGE_ME")):
         raise ValueError(f"Set CAMERA_SERIAL in {path}")
     if backend == "opencv" and not env.get("CAMERA_INDEX"):
@@ -106,7 +176,7 @@ def load_cameras(path: Path | None = None) -> list[CameraSettings]:
         height=int(env.get("CAMERA_HEIGHT", "480")),
         fps=int(env.get("CAMERA_FPS", "15")),
         zmq_host=host,
-        zmq_port=int(env.get("ZMQ_PORT", "5555")),
+        zmq_port=zmq_port,
         opencv_index=int(env.get("CAMERA_INDEX", "0")),
         serial=serial,
         use_depth=_as_bool(env.get("CAMERA_USE_DEPTH", "false")),

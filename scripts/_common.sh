@@ -217,6 +217,41 @@ confirm_continue() {
   read -r -p "Confirm hardware matches the banner above, then press Enter (Ctrl-C to abort) "
 }
 
+# Prefer first reachable host in ZMQ_HOSTS (Ethernet then Wi-Fi); else ZMQ_HOST.
+resolve_zmq_host() {
+  local port="${ZMQ_PORT:-5555}"
+  local -a candidates=()
+  local raw h
+  if [[ -n "${ZMQ_HOSTS:-}" ]]; then
+    local IFS=','
+    # shellcheck disable=SC2206
+    local -a parts=(${ZMQ_HOSTS})
+    unset IFS
+    for raw in "${parts[@]}"; do
+      h="${raw#"${raw%%[![:space:]]*}"}"
+      h="${h%"${h##*[![:space:]]}"}"
+      if [[ -n "$h" && "$h" != CHANGE_ME* ]]; then
+        candidates+=("$h")
+      fi
+    done
+  elif [[ -n "${ZMQ_HOST:-}" && "$ZMQ_HOST" != CHANGE_ME* ]]; then
+    candidates+=("$ZMQ_HOST")
+  fi
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    return 1
+  fi
+  for h in "${candidates[@]}"; do
+    if nc -z -G 1 "$h" "$port" >/dev/null 2>&1; then
+      ZMQ_HOST="$h"
+      echo "ZMQ: using $ZMQ_HOST:$port (reachable)" >&2
+      return 0
+    fi
+  done
+  ZMQ_HOST="${candidates[0]}"
+  echo "ZMQ: no candidate reachable; using $ZMQ_HOST:$port" >&2
+  return 0
+}
+
 load_camera() {
   local root cam
   root="$(project_root)"
@@ -238,6 +273,7 @@ load_camera() {
   CAMERA_BACKEND="${CAMERA_BACKEND:-opencv}"
   CAMERA_INDEX="${CAMERA_INDEX:-0}"
   ZMQ_HOST="${ZMQ_HOST:-}"
+  ZMQ_HOSTS="${ZMQ_HOSTS:-}"
   ZMQ_PORT="${ZMQ_PORT:-5555}"
   if [[ "$CAMERA_BACKEND" == "intelrealsense" ]]; then
     if [[ -z "${CAMERA_SERIAL:-}" || "$CAMERA_SERIAL" == CHANGE_ME* ]]; then
@@ -245,8 +281,8 @@ load_camera() {
       return 1
     fi
   elif [[ "$CAMERA_BACKEND" == "zmq" ]]; then
-    if [[ -z "$ZMQ_HOST" || "$ZMQ_HOST" == CHANGE_ME* ]]; then
-      echo "Set ZMQ_HOST in $cam to the HP Omen LAN IP (ipconfig on Windows)." >&2
+    if ! resolve_zmq_host; then
+      echo "Set ZMQ_HOST or ZMQ_HOSTS in $cam (e.g. 192.168.2.2,192.168.0.59)." >&2
       return 1
     fi
   elif [[ -z "${CAMERA_INDEX:-}" ]]; then
