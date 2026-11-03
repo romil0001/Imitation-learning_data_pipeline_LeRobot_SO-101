@@ -3,84 +3,134 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>SO-101 Visuomotor Lab</title>
+  <title>SO-101 Visuomotor Lab · Operator Console</title>
   <link rel="stylesheet" href="/static/app.css"/>
 </head>
 <body>
+
+  <!-- ================= TOP HUD TELEOP STATUS BAR ================= -->
   <header class="top">
     <div class="brand">
       <span class="mark">SO-101</span>
-      <span class="sub">Visuomotor Manipulation Lab · romil0001</span>
+      <span class="sub">Visuomotor Manipulation Lab · Follower Arm</span>
     </div>
+
     <div class="pills">
-      <span id="state" class="pill idle">IDLE</span>
-      <span id="timer" class="timer">00:00.0</span>
-      <span id="omen-pill" class="pill ghost">OMEN …</span>
+      <span id="state" class="pill idle" title="Active Teleoperation State">IDLE</span>
+      <span id="timer" class="timer" title="Elapsed Routine Time">00:00.0</span>
+      <span id="omen-pill" class="pill ghost" title="Camera Streaming Bridge">CONNECTING…</span>
     </div>
   </header>
 
+  <!-- ================= MAIN OPERATOR DOCK GRID ================= -->
   <main class="grid">
+
+    <!-- Primary Camera Viewports -->
     <section class="panel cam">
       <div class="panel-h">
-        <h1>Live streams</h1>
-        <span id="cam-meta" class="muted">waiting…</span>
+        <h1>Camera Viewports</h1>
+        <span id="cam-meta" class="muted">Scanning devices…</span>
       </div>
-      <div class="cams" id="cams"></div>
+      <!-- Feeds injected dynamically by app.js: D405 Left, D405 Right, Overview RGB -->
+      <div class="cams" id="cams">
+        <div class="cam-slot waiting">
+          <div class="stage empty-hint">Initializing camera streams…</div>
+        </div>
+      </div>
     </section>
 
+    <!-- Side Dock: Hardware, Joint Telemetry & Hotkeys -->
     <aside class="side">
+
+      <!-- Hardware & Device Status -->
       <section class="panel">
-        <div class="panel-h"><h1>Hardware</h1></div>
-        <ul class="kv" id="hw"></ul>
+        <div class="panel-h">
+          <h1>Hardware Telemetry</h1>
+        </div>
+        <ul class="kv" id="hw">
+          <li><span class="k">Loading…</span><span class="v">—</span></li>
+        </ul>
       </section>
+
+      <!-- 6-DOF Follower Joint Telemetry -->
       <section class="panel joints">
         <div class="panel-h">
-          <h1>Joints</h1>
-          <span id="joints-meta" class="muted">waiting for record/eval…</span>
+          <h1>Joint Telemetry</h1>
+          <span id="joints-meta" class="muted">STANDBY</span>
         </div>
         <div class="joint-legend">
-          <span class="lg state">state</span>
-          <span class="lg action">action</span>
+          <span class="lg state">State (Actual)</span>
+          <span class="lg action">Action (Target)</span>
         </div>
-        <div id="joints" class="joint-list"></div>
+        <div id="joints" class="joint-list">
+          <!-- Dynamically populated joint sliders -->
+        </div>
       </section>
+
+      <!-- Operator Hotkeys & Episode Controls -->
       <section class="panel">
-        <div class="panel-h"><h1>Keys</h1><span class="muted">click or press</span></div>
+        <div class="panel-h">
+          <h1>Operator Keypad</h1>
+          <span class="muted">Click or Press</span>
+        </div>
+
         <ul class="keys" id="key-help">
-          <li><kbd data-key="d" tabindex="0">D</kbd> refresh hardware status</li>
-          <li><kbd data-key="a" tabindex="0">A</kbd> start episode — run <code>scripts/08_record.sh</code></li>
+          <li>
+            <kbd data-key="space" tabindex="0">Space</kbd>
+            <span>start / stop recording episode</span>
+          </li>
+          <li>
+            <kbd data-key="d" tabindex="0">D</kbd>
+            <span>refresh hardware status</span>
+          </li>
+          <li>
+            <kbd data-key="a" tabindex="0">A</kbd>
+            <span>launch <code>08_record.sh</code></span>
+          </li>
           <li>
             <kbd data-key="n" tabindex="0">n</kbd> /
             <kbd data-key="r" tabindex="0">r</kbd> /
             <kbd data-key="q" tabindex="0">q</kbd>
-            save / redo / quit (record)
+            <span>save / redo / cancel</span>
           </li>
           <li>
             <kbd data-key="y" tabindex="0">y</kbd> /
             <kbd data-key="n" tabindex="0">n</kbd>
-            score trial (eval)
+            <span>success / failure (eval)</span>
           </li>
           <li>
             <kbd data-key="p" tabindex="0">p</kbd> /
             <kbd data-key="c" tabindex="0">c</kbd>
-            pause / correct (dagger)
+            <span>pause / intervention (dagger)</span>
           </li>
         </ul>
-        <p class="muted small">With record/eval/dagger running, keys work here (keyboard or click) — no need to focus the terminal. Every RGB + depth view from <code>camera.env</code> streams here. Keep the Omen publisher and <code>09_dashboard.sh</code> running.</p>
+
+        <p class="muted small">
+          Active hotkeys work directly from the browser without focusing the terminal. Feeds reflect <code>camera.env</code> configuration (2× D405 + 1× RGB Overview).
+        </p>
       </section>
+
     </aside>
 
+    <!-- Bottom Dock: Live Session Output Log -->
     <section class="panel logs">
       <div class="panel-h">
-        <h1>Live log</h1>
+        <h1>Console Stream</h1>
         <span class="muted">outputs/session.log</span>
       </div>
-      <pre id="log"></pre>
+      <pre id="log" tabindex="0" aria-label="Console Log Stream">Connecting to session log…</pre>
     </section>
+
   </main>
 
-  <div id="toast" hidden></div>
-  <footer class="site-foot">SO-101 Visuomotor Manipulation · romil0001</footer>
+  <!-- HUD Toast Notification -->
+  <div id="toast" hidden role="status" aria-live="polite"></div>
+
+  <!-- Footer -->
+  <footer class="site-foot">
+    SO-101 Follower Arm Visuomotor Lab · LeRobot Teleop Bridge
+  </footer>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
