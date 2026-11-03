@@ -125,7 +125,7 @@ def _load_eval_policy(
 def eval_from_env(
     *,
     checkpoint: str = "",
-    dataset_name: str = "so101_d405_demo",
+    dataset_name: str = "so101_bag_clip_bowl",
     duration_s: float = 60.0,
     confirm: bool = True,
     protocol: str = "",
@@ -165,7 +165,7 @@ def eval_from_env(
 
         task_text = load_protocol(proto_path).task
     if not task_text:
-        task_text = "Place keys into metal cup"
+        task_text = "Place bag clip in bowl"
 
     policy_obj = _load_eval_policy(
         policy_kind=policy,

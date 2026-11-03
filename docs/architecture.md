@@ -25,7 +25,7 @@ Leader USB + follower USB ───►
 | Machine | Owns | Does not own |
 |---------|------|----------------|
 | **Mac** | Leader + follower USB, `python -m so101`, ACT train/eval, dashboard | D405 USB (Librealsense cannot claim it reliably on macOS) |
-| **HP Omen (Windows)** | Wrist D405 + overhead USB webcam, ZMQ publisher | PyTorch, training, arm USB |
+| **HP Omen (Windows)** | Wrist D405 + overhead USB webcam, ZMQ publisher (Wi-Fi or direct Ethernet) | PyTorch, training, arm USB |
 
 Train ACT on the Mac (MPS). Never train on the 4 GB Omen.
 
@@ -89,7 +89,7 @@ dashboard/          FastAPI operator site (cameras, status, logs)
 
 ## Data
 
-Root: `data/datasets/<name>/` (gitignored). Default name `so101_d405_demo`.
+Root: `data/datasets/<name>/` (gitignored). Default name `so101_bag_clip_bowl`.
 
 ```text
 meta.json
@@ -127,7 +127,7 @@ the depth-grasp override stay unchanged. See [`algorithms.md`](algorithms.md).
    overrides vertical joints near contact using wrist depth
    (`config/hybrid_grasp.yaml`), then hands control back for lift/place.
 
-Scored eval (`config/eval/pen_to_keys.yaml`): independent trials, binary
+Scored eval (`config/eval/bag_clip_in_bowl.yaml`): independent trials, binary
 success (**y**/**n**), small condition grid. Logs:
 `outputs/eval/<checkpoint>/<run_id>/`.
 

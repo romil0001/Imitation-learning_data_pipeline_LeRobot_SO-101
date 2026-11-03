@@ -195,9 +195,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     rec = sub.add_parser("record", help="Collect teleop episodes")
-    rec.add_argument("--dataset", default="so101_d405_demo")
+    rec.add_argument("--dataset", default="so101_bag_clip_bowl")
     rec.add_argument("--num-episodes", type=int, default=50)
-    rec.add_argument("--task", default="Place keys into metal cup")
+    rec.add_argument("--task", default="Place bag clip in bowl")
     rec.add_argument("-y", "--yes", action="store_true", help="Skip hardware confirm prompt")
     rec.set_defaults(func=cmd_record)
 
@@ -207,7 +207,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="act",
         help="ML algorithm name (python -m so101 algorithms --family ml). act-jax forces the Flax trainer.",
     )
-    tr.add_argument("--dataset", default="so101_d405_demo")
+    tr.add_argument("--dataset", default="so101_bag_clip_bowl")
+
     tr.add_argument("--steps", type=int, default=40_000)
     tr.add_argument("--batch-size", type=int, default=0, help="0 = auto (2 on mps/cpu, 8 on cuda)")
     tr.add_argument("--output-dir", default="")
@@ -236,7 +237,8 @@ def build_parser() -> argparse.ArgumentParser:
         "dagger",
         help="Human-gated DAgger: pause, match leader to follower, record corrections",
     )
-    dg.add_argument("--dataset", default="so101_d405_demo", help="Demo dataset (cameras, home pose, task)")
+    dg.add_argument("--dataset", default="so101_bag_clip_bowl", help="Demo dataset (cameras, home pose, task)")
+
     dg.add_argument(
         "--corrections",
         default="",
@@ -265,7 +267,8 @@ def build_parser() -> argparse.ArgumentParser:
     cmp.set_defaults(func=cmd_compare_eval)
 
     ev = sub.add_parser("eval", help="Run a registered ML policy, or hybrid (ML + depth grasp)")
-    ev.add_argument("--dataset", default="so101_d405_demo")
+    ev.add_argument("--dataset", default="so101_bag_clip_bowl")
+
     ev.add_argument("--checkpoint", default="")
     ev.add_argument("--duration", type=float, default=60.0, help="Unscored timed run if --protocol is omitted")
     ev.add_argument(
@@ -307,7 +310,7 @@ def build_parser() -> argparse.ArgumentParser:
     ev.set_defaults(func=cmd_eval)
 
     conv = sub.add_parser("convert", help="Convert local SO101 dataset → LeRobot (for SmolVLA)")
-    conv.add_argument("--dataset", default="so101_d405_demo")
+    conv.add_argument("--dataset", default="so101_bag_clip_bowl")
     conv.add_argument("--dataset-dir", default="")
     conv.add_argument("--output-dir", default="", help="Default: data/lerobot/<dataset>")
     conv.add_argument("--repo-id", default="", help="LeRobot repo_id (default local/<dataset>)")
@@ -315,7 +318,7 @@ def build_parser() -> argparse.ArgumentParser:
     conv.set_defaults(func=cmd_convert)
 
     rp = sub.add_parser("replay", help="Replay one episode on the follower")
-    rp.add_argument("--dataset", default="so101_d405_demo")
+    rp.add_argument("--dataset", default="so101_bag_clip_bowl")
     rp.add_argument("--episode", type=int, default=0)
     rp.add_argument("-y", "--yes", action="store_true")
     rp.set_defaults(func=cmd_replay)
@@ -324,9 +327,9 @@ def build_parser() -> argparse.ArgumentParser:
         "replay-capture",
         help="Replay source actions while recording live multi-cam (+depth) into a new dataset",
     )
-    rc.add_argument("--source", default="so101_d405_demo", help="Existing demo dataset to replay")
-    rc.add_argument("--dest", default="so101_keys_in_cup", help="New dataset name to write")
-    rc.add_argument("--task", default="keys in the cup", help="Language/task string for dest meta")
+    rc.add_argument("--source", default="so101_bag_clip_bowl", help="Existing demo dataset to replay")
+    rc.add_argument("--dest", default="so101_bag_clip_bowl_capture", help="New dataset name to write")
+    rc.add_argument("--task", default="Place bag clip in bowl", help="Language/task string for dest meta")
     rc.add_argument("--episode", type=int, default=None, help="Replay only this source episode index")
     rc.add_argument("--max-episodes", type=int, default=None, help="Cap number of source episodes")
     rc.add_argument("-y", "--yes", action="store_true")
@@ -338,8 +341,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cap.add_argument(
         "--protocol",
-        default="config/eval/pen_to_keys.yaml",
-        help="Protocol YAML to update (default: config/eval/pen_to_keys.yaml)",
+        default="config/eval/bag_clip_in_bowl.yaml",
+        help="Protocol YAML to update (default: config/eval/bag_clip_in_bowl.yaml)",
     )
     cap.add_argument(
         "--print-only",
@@ -350,7 +353,7 @@ def build_parser() -> argparse.ArgumentParser:
     cap.set_defaults(func=cmd_capture_home)
 
     insp = sub.add_parser("inspect", help="Print local dataset meta")
-    insp.add_argument("--dataset", default="so101_d405_demo")
+    insp.add_argument("--dataset", default="so101_bag_clip_bowl")
     insp.add_argument("--dataset-dir", default="")
     insp.set_defaults(func=cmd_inspect)
 

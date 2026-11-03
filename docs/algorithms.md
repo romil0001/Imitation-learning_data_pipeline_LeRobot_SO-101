@@ -31,7 +31,7 @@ They do not learn a mapping from images to actions.
 | `home` | Joint-space move to the mean demo start | used by eval |
 | `depth-grasp` | Wrist-depth override near contact | `config/hybrid_grasp.yaml` |
 | `hybrid` | Any ML policy, plus depth-grasp at contact | `--policy hybrid --policy-base <ml>` |
-| `protocol` | Conditions × trials, binary y/n | `--protocol config/eval/pen_to_keys.yaml` |
+| `protocol` | Conditions × trials, binary y/n | `--protocol config/eval/bag_clip_in_bowl.yaml` |
 | `convert` | LeRobot export (RGB only) for SmolVLA | `python -m so101 convert` |
 
 `hybrid` is setup: the grasp law is analytic. The base you name with
@@ -68,7 +68,7 @@ Wrap a learned policy with the contact override:
 ```bash
 python -m so101 eval --policy hybrid --policy-base act \
   --grasp-config config/hybrid_grasp.yaml \
-  --protocol config/eval/pen_to_keys.yaml
+  --protocol config/eval/bag_clip_in_bowl.yaml
 ```
 
 `--policy-base` accepts any registered ML name, including one you added.

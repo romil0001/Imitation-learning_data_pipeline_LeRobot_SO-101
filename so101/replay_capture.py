@@ -99,9 +99,9 @@ def replay_capture_episode(
 
 def replay_capture_from_env(
     *,
-    source_dataset: str = "so101_d405_demo",
-    dest_dataset: str = "so101_keys_in_cup",
-    task: str = "keys in the cup",
+    source_dataset: str = "so101_bag_clip_bowl",
+    dest_dataset: str = "so101_bag_clip_bowl_capture",
+    task: str = "Place bag clip in bowl",
     episode: int | None = None,
     max_episodes: int | None = None,
     confirm: bool = True,

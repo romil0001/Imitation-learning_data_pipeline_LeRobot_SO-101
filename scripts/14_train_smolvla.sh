@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 LEROBOT_ROOT="${LEROBOT_ROOT:-$ROOT/data/lerobot/$DATASET_NAME}"
 REPO_ID="${REPO_ID:-local/$DATASET_NAME}"
 JOB_NAME="${JOB_NAME:-smolvla_${DATASET_NAME}}"

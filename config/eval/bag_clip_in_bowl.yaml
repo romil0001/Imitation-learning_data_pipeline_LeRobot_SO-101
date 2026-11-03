@@ -1,0 +1,29 @@
+task: Place bag clip in bowl
+timeout_s: 60
+n_trials_per_condition: 5
+# If omitted, home is the mean of episode state[0] in the eval dataset.
+# Same cell home as keys protocol; re-run capture-home if the nest changes.
+home_qpos: [-1.846, -104.923, 46.857, 86.901, -4.615, 6.052]
+home_steps: 80
+home_dt: 0.04
+success_criterion: >
+  Bag clip is inside the bowl, gripper is clear of the clip, and nothing was
+  knocked over.
+conditions:
+  # `pen` is the protocol placement slot name (left/center/right on the table).
+  - id: clip=left
+    pen: left
+    lighting: overhead
+    distractors: none
+    split: id
+  - id: clip=center
+    pen: center
+    lighting: overhead
+    distractors: none
+    split: id
+  - id: clip=right
+    pen: right
+    lighting: overhead
+    distractors: none
+    split: id
+

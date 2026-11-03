@@ -26,3 +26,5 @@ echo "XWF-1080P is usually --webcam-index 2 (0=laptop, 1=empty). Run --list-webc
 echo.
 echo Allow port 5555 in Windows Firewall if the Mac cannot connect.
 echo Set ZMQ_HOST on the Mac to this PC's IPv4 address (ipconfig).
+echo For a direct USB-Ethernet cable to the Mac: run omen\setup_ethernet_link.bat as Admin,
+echo then on the Mac: bash scripts/21_use_ethernet_link.sh  ^(ZMQ_HOST=192.168.2.2^).

@@ -12,7 +12,7 @@ load_ports
 require_follower_port_exists
 load_camera
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 DURATION="${DURATION:-120}"
 PROTOCOL="${PROTOCOL-}"
 CHECKPOINT="${CHECKPOINT:-}"

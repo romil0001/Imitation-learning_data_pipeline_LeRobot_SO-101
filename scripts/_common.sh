@@ -172,7 +172,7 @@ PY
 dataset_local_root() {
   local root
   root="$(project_root)"
-  printf '%s' "$root/data/datasets/${DATASET_NAME:-so101_d405_demo}"
+  printf '%s' "$root/data/datasets/${DATASET_NAME:-so101_bag_clip_bowl}"
 }
 
 dataset_episode_count() {

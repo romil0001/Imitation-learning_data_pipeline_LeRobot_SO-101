@@ -46,7 +46,7 @@ def capture_follower_qpos(follower: Any) -> np.ndarray:
 
 def capture_home_from_env(
     *,
-    protocol: str = "config/eval/pen_to_keys.yaml",
+    protocol: str = "config/eval/bag_clip_in_bowl.yaml",
     confirm: bool = True,
     write: bool = True,
 ) -> np.ndarray:

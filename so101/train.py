@@ -370,7 +370,7 @@ def train(
 
 def train_from_env(
     *,
-    dataset_name: str = "so101_d405_demo",
+    dataset_name: str = "so101_bag_clip_bowl",
     steps: int = 40_000,
     batch_size: int = 0,
     output_dir: str = "",

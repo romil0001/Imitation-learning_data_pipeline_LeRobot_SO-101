@@ -10,7 +10,7 @@ load_ports
 require_follower_port_exists
 load_camera
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 POLICY_BASE="${POLICY_BASE:-smolvla}"
 if [[ "$POLICY_BASE" == "act" || "$POLICY_BASE" == "act-jax" ]]; then
   POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/act_${DATASET_NAME}}"
@@ -21,7 +21,7 @@ else
   POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/${POLICY_BASE}_${DATASET_NAME}}"
 fi
 DURATION="${DURATION:-60}"
-PROTOCOL="${PROTOCOL-$ROOT/config/eval/pen_to_keys.yaml}"
+PROTOCOL="${PROTOCOL-$ROOT/config/eval/bag_clip_in_bowl.yaml}"
 N_TRIALS="${N_TRIALS:-}"
 GRASP_CONFIG="${GRASP_CONFIG:-$ROOT/config/hybrid_grasp.yaml}"
 TASK="${TASK:-}"

@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 CORRECTIONS_NAME="${CORRECTIONS_NAME:-${DATASET_NAME}_dagger}"
 BASE_JOB="${BASE_JOB:-act_${DATASET_NAME}}"
 INIT_CHECKPOINT="${INIT_CHECKPOINT:-$ROOT/outputs/train/$BASE_JOB}"

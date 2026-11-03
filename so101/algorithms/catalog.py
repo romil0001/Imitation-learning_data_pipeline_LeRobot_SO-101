@@ -117,7 +117,7 @@ def builtin_algorithms() -> list[Algorithm]:
             name="protocol",
             family="setup",
             summary="Repeat independent trials per scene condition and record binary y/n success.",
-            run="python -m so101 eval --protocol config/eval/pen_to_keys.yaml",
+            run="python -m so101 eval --protocol config/eval/bag_clip_in_bowl.yaml",
             module="so101.eval_protocol",
         ),
         Algorithm(
@@ -164,7 +164,7 @@ def builtin_algorithms() -> list[Algorithm]:
             summary="Language-conditioned vision-language-action policy. Wrist depth is not a model input.",
             run=(
                 "train: bash scripts/13_convert_lerobot.sh && bash scripts/14_train_smolvla.sh\n"
-                'eval:  python -m so101 eval --policy smolvla --task "Place keys into metal cup"'
+                'eval:  python -m so101 eval --policy smolvla --task "Place bag clip in bowl"'
             ),
             module="so101.models.smolvla_wrap",
             load=load_smolvla,

@@ -20,7 +20,7 @@ class SmolVLAWrapConfig:
     # Policy/checkpoint camera keys (SmolVLA base uses camera1/camera2/…).
     policy_camera_names: tuple[str, ...] = ("camera1", "camera2")
     robot_type: str = "so101_follower"
-    task: str = "Place keys into metal cup"
+    task: str = "Place bag clip in bowl"
     image_height: int = 480
     image_width: int = 640
 
@@ -51,7 +51,7 @@ class SmolVLAPolicyWrap:
         checkpoint: str | Path,
         *,
         device: str | None = None,
-        task: str = "Place keys into metal cup",
+        task: str = "Place bag clip in bowl",
         camera_names: tuple[str, ...] | list[str] = ("wrist", "overhead"),
         policy_camera_names: tuple[str, ...] | list[str] | None = None,
         image_height: int = 480,

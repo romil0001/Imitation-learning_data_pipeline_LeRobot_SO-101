@@ -12,12 +12,12 @@ load_ports
 require_follower_port_exists
 load_camera
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 POLICY="${POLICY:-act}"
 JOB_NAME="${JOB_NAME:-act_${DATASET_NAME}}"
 POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/$JOB_NAME}"
 DURATION="${DURATION:-60}"
-PROTOCOL="${PROTOCOL-$ROOT/config/eval/pen_to_keys.yaml}"
+PROTOCOL="${PROTOCOL-$ROOT/config/eval/bag_clip_in_bowl.yaml}"
 N_TRIALS="${N_TRIALS:-}"
 
 if [[ "$POLICY" == "act" || "$POLICY" == "act-jax" ]]; then

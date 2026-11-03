@@ -108,7 +108,7 @@ bash scripts/11_eval_act.sh   # → outputs/eval/.../summary.json
 # optional interactive imitation:
 bash scripts/18_dagger.sh
 bash scripts/19_train_dagger.sh
-POLICY_PATH=outputs/train/act_so101_d405_demo_dagger bash scripts/11_eval_act.sh
+POLICY_PATH=outputs/train/act_so101_bag_clip_bowl_dagger bash scripts/11_eval_act.sh
 ```
 
 Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/reproduction.md).

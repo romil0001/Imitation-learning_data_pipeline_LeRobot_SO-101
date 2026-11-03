@@ -9,7 +9,7 @@ require_conda_lerobot
 load_ports
 require_follower_port_exists
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 EPISODE="${EPISODE:-0}"
 require_local_dataset
 require_saved_episode "$EPISODE"

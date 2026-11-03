@@ -11,7 +11,7 @@ require_follower_port_exists
 require_leader_port_exists
 load_camera
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 CORRECTIONS_NAME="${CORRECTIONS_NAME:-${DATASET_NAME}_dagger}"
 JOB_NAME="${JOB_NAME:-act_${DATASET_NAME}}"
 POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/$JOB_NAME}"

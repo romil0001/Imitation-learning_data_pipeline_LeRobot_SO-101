@@ -56,8 +56,11 @@ def test_write_home_qpos_replaces_existing(tmp_path: Path) -> None:
 
 def test_capture_home_parser() -> None:
     args = build_parser().parse_args(
-        ["capture-home", "--protocol", "config/eval/pen_to_keys.yaml", "--print-only", "-y"]
+        ["capture-home", "--protocol", "config/eval/bag_clip_in_bowl.yaml", "--print-only", "-y"]
     )
-    assert args.protocol.endswith("pen_to_keys.yaml")
+    assert args.protocol.endswith("bag_clip_in_bowl.yaml")
     assert args.print_only is True
     assert args.yes is True
+    default = build_parser().parse_args(["capture-home"])
+    assert default.protocol.endswith("bag_clip_in_bowl.yaml")
+

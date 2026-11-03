@@ -10,9 +10,9 @@ require_follower_port_exists
 require_leader_port_exists
 load_camera
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 NUM_EPISODES="${NUM_EPISODES:-50}"
-TASK="${TASK:-Place keys into metal cup}"
+TASK="${TASK:-Place bag clip in bowl}"
 
 EXISTING="$(dataset_episode_count)"
 banner_both_arms

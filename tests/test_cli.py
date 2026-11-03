@@ -55,6 +55,10 @@ def test_replay_capture_parser() -> None:
     assert args.dest == "so101_keys_in_cup"
     assert args.task == "keys in the cup"
     assert args.episode == 0
+    defaults = build_parser().parse_args(["replay-capture"])
+    assert defaults.source == "so101_bag_clip_bowl"
+    assert defaults.dest == "so101_bag_clip_bowl_capture"
+    assert defaults.task == "Place bag clip in bowl"
 
 
 def test_train_parser_gdm_flags() -> None:
@@ -109,13 +113,19 @@ def test_eval_parser_hybrid_flags() -> None:
             "--grasp-config",
             "config/hybrid_grasp.yaml",
             "--task",
-            "Place keys into metal cup",
+            "Place bag clip in bowl",
         ]
     )
     assert args.policy == "hybrid"
     assert args.policy_base == "act"
     assert args.grasp_config.endswith("hybrid_grasp.yaml")
-    assert "keys" in args.task
+    assert "bag clip" in args.task
+
+
+def test_record_defaults_bag_clip_task() -> None:
+    args = build_parser().parse_args(["record"])
+    assert args.dataset == "so101_bag_clip_bowl"
+    assert args.task == "Place bag clip in bowl"
 
 
 def test_eval_parser_recipe_flags() -> None:

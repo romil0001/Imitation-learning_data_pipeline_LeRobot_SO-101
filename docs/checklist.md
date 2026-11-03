@@ -25,9 +25,9 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 ## Two machines
 - [ ] **Mac:** leader + follower USB (motor boards can share USB 2)
 - [ ] **HP Omen:** D405 (wrist) on USB 3; USB webcam (overhead)
-- [ ] Same Wi-Fi/LAN; Omen `ipconfig` IPv4 written into Mac `config/camera.env` as `ZMQ_HOST`
-- [ ] Mac `config/camera.env` has `CAMERA_NAMES=wrist,overhead` and `CAMERA_USE_DEPTH=true`
-- [ ] Windows Firewall allows inbound TCP **5555**
+- [ ] Camera link: **prefer USB-Ethernet** (`omen\setup_ethernet_link.bat` + `bash scripts/21_use_ethernet_link.sh` → `ZMQ_HOST=192.168.2.2`) or same Wi-Fi with Omen `ipconfig` IPv4 in Mac `config/camera.env`
+- [ ] Mac `config/camera.env` has `CAMERA_NAMES=wrist,overhead,base` and `CAMERA_USE_DEPTH=true`
+- [ ] Windows Firewall allows inbound TCP **5555** (Ethernet script adds the rule)
 - [ ] Do **not** train on the 4 GB Omen (train ACT on the Mac with MPS)
 
 ## Mac software order
@@ -51,4 +51,4 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 3. Mac: `bash scripts/08_record.sh` (~50 episodes for ACT; same cameras/task; data in `data/datasets/`)
 4. Mac: `bash scripts/10_train_act.sh` (MPS, hours — not the Omen; holds out episodes, writes `best_val`; depth used automatically if recorded; optional `--backend jax`)
 5. Mac: follower + Omen publisher → `bash scripts/11_eval_act.sh` (loads `best_val`; wrist depth fed to policy when trained with depth; scored pen-to-keys grid; reset scene, then **y**/**n** each trial; train loss is not the score; logs in `outputs/eval/`)
-6. Optional HG-DAgger: both arms + Omen → `bash scripts/18_dagger.sh` (**p** pause/sync, **c** record correction, **n** save) → `bash scripts/19_train_dagger.sh` → re-eval with `POLICY_PATH=outputs/train/act_so101_d405_demo_dagger` → `python -m so101 compare-eval`
+6. Optional HG-DAgger: both arms + Omen → `bash scripts/18_dagger.sh` (**p** pause/sync, **c** record correction, **n** save) → `bash scripts/19_train_dagger.sh` → re-eval with `POLICY_PATH=outputs/train/act_so101_bag_clip_bowl_dagger` → `python -m so101 compare-eval`

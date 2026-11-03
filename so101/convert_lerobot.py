@@ -36,7 +36,7 @@ def convert_so101_to_lerobot(
     source: str | Path,
     dest: str | Path,
     *,
-    repo_id: str = "local/so101_d405_demo",
+    repo_id: str = "local/so101_bag_clip_bowl",
     robot_type: str = "so101_follower",
     max_episodes: int | None = None,
     image_writer_threads: int = 1,

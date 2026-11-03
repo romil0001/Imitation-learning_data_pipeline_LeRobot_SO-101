@@ -71,7 +71,7 @@ bash scripts/10_train_act.sh          # ACT
 bash scripts/11_eval_act.sh           # protocol eval → outcomes
 bash scripts/18_dagger.sh             # HG-DAgger corrections (both arms ON)
 bash scripts/19_train_dagger.sh       # fine-tune ACT on demos + corrections
-POLICY_PATH=outputs/train/act_so101_d405_demo_dagger bash scripts/11_eval_act.sh
+POLICY_PATH=outputs/train/act_so101_bag_clip_bowl_dagger bash scripts/11_eval_act.sh
 python -m so101 compare-eval --baseline <baseline>/summary.json --candidate <dagger>/summary.json
 bash scripts/13_convert_lerobot.sh    # for SmolVLA
 bash scripts/14_train_smolvla.sh
@@ -82,13 +82,14 @@ Direct CLI equivalents:
 
 ```bash
 python -m so101 algorithms          # setup routines vs learned policies
-python -m so101 record --dataset so101_d405_demo --num-episodes 50
-python -m so101 train --algo act --dataset so101_d405_demo --val-frac 0.2 --seed 0
-python -m so101 dagger --dataset so101_d405_demo --checkpoint outputs/train/act_so101_d405_demo
-python -m so101 train --algo act --dataset so101_d405_demo --corrections so101_d405_demo_dagger --init-checkpoint outputs/train/act_so101_d405_demo --steps 8000
-python -m so101 eval --policy act --protocol config/eval/pen_to_keys.yaml --n-trials 5
-python -m so101 eval --policy hybrid --policy-base act --grasp-config config/hybrid_grasp.yaml --protocol config/eval/pen_to_keys.yaml -y
+python -m so101 record --dataset so101_bag_clip_bowl --num-episodes 50
+python -m so101 train --algo act --dataset so101_bag_clip_bowl --val-frac 0.2 --seed 0
+python -m so101 dagger --dataset so101_bag_clip_bowl --checkpoint outputs/train/act_so101_bag_clip_bowl
+python -m so101 train --algo act --dataset so101_bag_clip_bowl --corrections so101_bag_clip_bowl_dagger --init-checkpoint outputs/train/act_so101_bag_clip_bowl --steps 8000
+python -m so101 eval --policy act --protocol config/eval/bag_clip_in_bowl.yaml --n-trials 5
+python -m so101 eval --policy hybrid --policy-base act --grasp-config config/hybrid_grasp.yaml --protocol config/eval/bag_clip_in_bowl.yaml -y
 python -m so101 compare-eval --baseline <a>/summary.json --candidate <b>/summary.json
 ```
+
 
 Eval artifacts: `outputs/eval/<checkpoint>/<run_id>/summary.json`.

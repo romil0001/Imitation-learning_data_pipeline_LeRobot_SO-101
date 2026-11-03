@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/_common.sh"
 require_conda_lerobot
 
-DATASET_NAME="${DATASET_NAME:-so101_d405_demo}"
+DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
 ALGO="${ALGO:-act}"
 JOB_NAME="${JOB_NAME:-act_${DATASET_NAME}}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/train/$JOB_NAME}"

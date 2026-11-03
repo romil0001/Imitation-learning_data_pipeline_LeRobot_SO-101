@@ -14,6 +14,7 @@ from so101.eval_protocol import load_protocol, run_protocol
 from so101.hardware import qpos_from_obs
 
 PROTOCOL_PATH = project_root() / "config" / "eval" / "pen_to_keys.yaml"
+BAG_CLIP_PROTOCOL_PATH = project_root() / "config" / "eval" / "bag_clip_in_bowl.yaml"
 
 
 class FakeFollower:
@@ -95,6 +96,18 @@ def test_load_pen_to_keys_protocol() -> None:
     assert [c.id for c in proto.conditions] == ["keys=left", "keys=center", "keys=right"]
     assert all(c.lighting == "overhead" and c.distractors == "none" and c.split == "id" for c in proto.conditions)
     assert [c.pen for c in proto.conditions] == ["left", "center", "right"]
+
+
+def test_load_bag_clip_in_bowl_protocol() -> None:
+    proto = load_protocol(BAG_CLIP_PROTOCOL_PATH)
+    assert proto.task == "Place bag clip in bowl"
+    assert proto.timeout_s == 60
+    assert proto.n_trials_per_condition == 5
+    assert "bowl" in proto.success_criterion.lower()
+    assert [c.id for c in proto.conditions] == ["clip=left", "clip=center", "clip=right"]
+    assert all(c.lighting == "overhead" and c.distractors == "none" and c.split == "id" for c in proto.conditions)
+    assert [c.pen for c in proto.conditions] == ["left", "center", "right"]
+
 
 
 def test_run_protocol_writes_summary_and_trial_logs(tmp_path: Path) -> None:

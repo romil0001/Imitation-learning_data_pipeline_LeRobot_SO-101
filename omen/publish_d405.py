@@ -320,7 +320,9 @@ def main() -> int:
     cam_keys = [s.name for s in streams] + ([] if webcam is None else [args.overhead_name])
     print(f"ZMQ PUB tcp://{args.bind}:{args.port}  cameras={cam_keys}", flush=True)
     print(
-        "On the Mac set CAMERA_NAMES=" + ",".join(cam_keys) + " and ZMQ_HOST to this PC's LAN IP.",
+        "On the Mac set CAMERA_NAMES="
+        + ",".join(cam_keys)
+        + " and ZMQ_HOST to this PC's IP (Wi-Fi from ipconfig, or 192.168.2.2 after omen\\setup_ethernet_link.bat).",
         flush=True,
     )
 

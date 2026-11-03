@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replay teleop demos while capturing live wrist+overhead+base (+depths) into so101_keys_in_cup.
+# Replay teleop demos while capturing live wrist+overhead+base (+depths) into so101_bag_clip_bowl_capture.
 # Omen must publish all cams. Follower ON; leader OFF.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,9 +10,9 @@ load_ports
 require_follower_port_exists
 load_camera
 
-SOURCE="${SOURCE:-so101_d405_demo}"
-DEST="${DEST:-so101_keys_in_cup}"
-TASK="${TASK:-keys in the cup}"
+SOURCE="${SOURCE:-so101_bag_clip_bowl}"
+DEST="${DEST:-so101_bag_clip_bowl_capture}"
+TASK="${TASK:-Place bag clip in bowl}"
 EPISODE="${EPISODE:-}"
 MAX_EPISODES="${MAX_EPISODES:-}"
 

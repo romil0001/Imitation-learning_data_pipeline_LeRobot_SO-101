@@ -23,7 +23,7 @@ def replay_episode(
             sleep(leftover)
 
 
-def replay_from_env(*, dataset_name: str = "so101_d405_demo", episode: int = 0, confirm: bool = True) -> None:
+def replay_from_env(*, dataset_name: str = "so101_bag_clip_bowl", episode: int = 0, confirm: bool = True) -> None:
     from so101.config import load_ports, project_root
     from so101.dataset import SO101Dataset
     from so101.hardware import make_follower

@@ -75,7 +75,7 @@ flowchart TB
   OBS --> SVp["SmolVLA<br/>RGB + language task<br/>no depth in backbone"]
   OBS --> HYp["Hybrid<br/>SmolVLA or ACT base<br/>+ DepthGraspController near contact"]
 
-  ACTp --> OUT["Same eval protocol<br/>pen_to_keys.yaml"]
+  ACTp --> OUT["Same eval protocol<br/>bag_clip_in_bowl.yaml"]
   SVp --> OUT
   HYp --> OUT
 
@@ -90,12 +90,12 @@ grasp reliability without feeding depth into the VLA backbone.
 
 ## Evaluation protocol graph
 
-Default task: *Place keys into metal cup*. Protocol:
-`config/eval/pen_to_keys.yaml`.
+Default task: *Place bag clip in bowl*. Protocol:
+`config/eval/bag_clip_in_bowl.yaml` (legacy: `config/eval/pen_to_keys.yaml`).
 
 ```mermaid
 flowchart TD
-  P[Load protocol YAML] --> GRID["Condition grid<br/>keys=left · center · right"]
+  P[Load protocol YAML] --> GRID["Condition grid<br/>clip=left · center · right"]
   GRID --> N["n_trials_per_condition = 5"]
   N --> LOOP{For each trial}
   LOOP --> HOME[Interpolate to home qpos]
@@ -109,13 +109,13 @@ flowchart TD
 
 ### Success criterion (fixed at eval time)
 
-Keys inside the metal cup, gripper clear of the keys, nothing knocked over.
+Bag clip inside the bowl, gripper clear of the clip, nothing knocked over.
 Each trial is scored independently after a fresh reset, so success rates reflect
 real task completion and can be compared fairly across policies and conditions.
 
 ### Example outcome structure
 
-After `python -m so101 eval --protocol config/eval/pen_to_keys.yaml`:
+After `python -m so101 eval --protocol config/eval/bag_clip_in_bowl.yaml`:
 
 ```text
 outputs/eval/<checkpoint>/<run_id>/

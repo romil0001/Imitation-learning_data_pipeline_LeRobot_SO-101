@@ -42,7 +42,8 @@ Episode schema (`data/datasets/<name>/`):
 Joint order: `shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`,
 `wrist_roll`, `gripper`.
 
-Default task string: *Place keys into metal cup*.
+Default task string: *Place bag clip in bowl* (legacy keys demos remain under
+`so101_d405_demo` / `config/eval/pen_to_keys.yaml`).
 
 ## Policies
 
@@ -99,7 +100,7 @@ Base policy (ACT or SmolVLA) controls approach and transport. When wrist depth
 
 ## Evaluation protocol
 
-Scored eval uses YAML protocols (default: `config/eval/pen_to_keys.yaml`). Each
+Scored eval uses YAML protocols (default: `config/eval/bag_clip_in_bowl.yaml`). Each
 trial runs under a defined scene condition; the workspace is reset between
 trials; success is judged with a binary yes/no against a written criterion.
 Repeating independent trials per condition yields overall and per-condition
