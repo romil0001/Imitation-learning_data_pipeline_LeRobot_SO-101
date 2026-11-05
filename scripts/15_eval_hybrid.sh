@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # Hybrid eval: SmolVLA (or ACT) for overall motion + wrist-depth grasp assist.
-# Omen publisher must stream RGB+depth. Follower ON; leader can be OFF.
+# Interactive menu by default. Skip: INTERACTIVE=0 POLICY_BASE=smolvla ...
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/_common.sh
 source "$ROOT/scripts/_common.sh"
+# shellcheck source=scripts/_eval_prompt.sh
+source "$ROOT/scripts/_eval_prompt.sh"
 require_conda_lerobot
 load_ports
 require_follower_port_exists
 load_camera
 
 DATASET_NAME="${DATASET_NAME:-so101_bag_clip_bowl}"
+POLICY="${POLICY:-hybrid}"
 POLICY_BASE="${POLICY_BASE:-smolvla}"
 if [[ "$POLICY_BASE" == "act" || "$POLICY_BASE" == "act-jax" ]]; then
   POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/act_${DATASET_NAME}}"
@@ -21,10 +24,15 @@ else
   POLICY_PATH="${POLICY_PATH:-$ROOT/outputs/train/${POLICY_BASE}_${DATASET_NAME}}"
 fi
 DURATION="${DURATION:-60}"
-PROTOCOL="${PROTOCOL-$ROOT/config/eval/bag_clip_in_bowl.yaml}"
+if [[ -z "${PROTOCOL+x}" ]]; then
+  PROTOCOL="$ROOT/config/eval/bag_clip_in_bowl.yaml"
+fi
 N_TRIALS="${N_TRIALS:-}"
 GRASP_CONFIG="${GRASP_CONFIG:-$ROOT/config/hybrid_grasp.yaml}"
 TASK="${TASK:-}"
+
+prompt_eval_options
+POLICY=hybrid
 
 echo "============================================================"
 echo " HYBRID EVAL — SmolVLA/ACT + depth grasp"
@@ -37,7 +45,7 @@ echo "Policy:   $POLICY_PATH"
 echo "Grasp:    $GRASP_CONFIG"
 echo "Follower: $FOLLOWER_PORT ($FOLLOWER_ID)"
 echo "Camera:   ${CAMERA_NAMES:-$CAMERA_NAME} backend=$CAMERA_BACKEND zmq=${ZMQ_HOST:-}:${ZMQ_PORT:-}"
-if [[ -n "$PROTOCOL" ]]; then
+if [[ "${EVAL_MODE}" == "protocol" && -n "${PROTOCOL:-}" ]]; then
   echo "Protocol: $PROTOCOL"
 else
   echo "Duration: ${DURATION}s (unscored)"
@@ -57,12 +65,16 @@ EVAL_ARGS=(
 if [[ -n "$TASK" ]]; then
   EVAL_ARGS+=(--task="$TASK")
 fi
-if [[ -n "$PROTOCOL" ]]; then
+if [[ "${EVAL_MODE}" == "protocol" && -n "${PROTOCOL:-}" ]]; then
   EVAL_ARGS+=(--protocol="$PROTOCOL")
   if [[ -n "$N_TRIALS" ]]; then
     EVAL_ARGS+=(--n-trials="$N_TRIALS")
   fi
 else
   EVAL_ARGS+=(--duration="$DURATION")
+fi
+_eval_append_control_flags
+if ((${#EXTRA_EVAL_FLAGS[@]})); then
+  EVAL_ARGS+=("${EXTRA_EVAL_FLAGS[@]}")
 fi
 run_logged eval_hybrid "${EVAL_ARGS[@]}"

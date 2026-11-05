@@ -59,5 +59,11 @@ run_logged train_dagger "$(conda_lerobot_python)" -m so101 train \
 
 echo
 echo "Checkpoints: $OUTPUT_DIR/best_val/model.pt"
-echo "Re-score: POLICY_PATH=$OUTPUT_DIR bash scripts/11_eval_act.sh"
-echo "Then: python -m so101 compare-eval --baseline <first summary.json> --candidate <new summary.json>"
+echo "Re-score (act25 default, saves y→ ${DATASET_NAME}_eval):"
+echo "  POLICY_PATH=$OUTPUT_DIR CONTROL_MODE=act25 bash scripts/11_eval_act.sh"
+echo "Compare pc_success vs baseline eval run:"
+echo "  python -m so101 compare-eval \\"
+echo "    --baseline outputs/eval/<baseline_run>/summary.json \\"
+echo "    --candidate outputs/eval/<dagger_run>/summary.json"
+echo "If grasp still weak: POLICY_BASE=act bash scripts/15_eval_hybrid.sh  (depth assist check)"
+echo "Helper: bash scripts/20_rescore_compare.sh"

@@ -1,0 +1,9 @@
+# Queue 200 open-loop steps then replan (capped by checkpoint chunk_size).
+# Current bag-clip ACT is chunk_size=100 → effective 100 until you retrain with chunk 200.
+name: act200
+base: act
+n_action_steps: 200
+async_replan: false
+replan_threshold: 25
+low_pass_alpha: 0.3
+freespace_scale: 1.0

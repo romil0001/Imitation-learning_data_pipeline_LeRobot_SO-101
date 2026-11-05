@@ -64,6 +64,7 @@ function fmtTime(s) {
 function clsFor(state) {
   const x = (state || "IDLE").toLowerCase();
   if (x === "recording") return "recording";
+  if (x === "eval") return "eval";
   if (x === "teleop") return "teleop";
   if (x === "disconnected") return "bad";
   return "idle";
@@ -894,9 +895,205 @@ document.querySelectorAll("kbd[data-key]").forEach((el) => {
   });
 });
 
+// ---------------------- EVAL LAUNCHER ---------------------- //
+
+let evalOptionsCache = null;
+
+function fillSelect(el, items, valueKey, labelKey, selected) {
+  if (!el) return;
+  el.innerHTML = "";
+  for (const item of items) {
+    const opt = document.createElement("option");
+    if (typeof item === "string") {
+      opt.value = item;
+      opt.textContent = item;
+    } else {
+      opt.value = item[valueKey];
+      opt.textContent = item[labelKey] || item[valueKey];
+    }
+    if (opt.value === selected) opt.selected = true;
+    el.appendChild(opt);
+  }
+}
+
+function syncEvalModeVisibility() {
+  const mode = document.getElementById("eval-mode")?.value || "protocol";
+  const protoWrap = document.getElementById("eval-protocol-wrap");
+  const durWrap = document.getElementById("eval-duration-wrap");
+  if (protoWrap) protoWrap.style.display = mode === "protocol" ? "" : "none";
+  if (durWrap) durWrap.style.display = mode === "timed" ? "" : "none";
+}
+
+function syncEvalPolicyVisibility() {
+  const policy = document.getElementById("eval-policy")?.value || "act";
+  const baseWrap = document.getElementById("eval-base-wrap");
+  if (baseWrap) baseWrap.style.display = policy === "hybrid" ? "" : "none";
+}
+
+function syncEvalWeightsForCheckpoint() {
+  const sel = document.getElementById("eval-checkpoint");
+  const weightsEl = document.getElementById("eval-weights");
+  if (!sel || !weightsEl || !evalOptionsCache) return;
+  const path = sel.value;
+  const ck = (evalOptionsCache.checkpoints || []).find((c) => c.path === path);
+  const weights = (ck && ck.weights && ck.weights.length) ? ck.weights : ["best_val", "last"];
+  const prev = weightsEl.value;
+  fillSelect(weightsEl, weights, null, null, weights.includes(prev) ? prev : weights[0]);
+}
+
+function renderEvalStatus(status) {
+  const line = document.getElementById("eval-status-line");
+  if (!line) return;
+  if (status && status.running && status.info) {
+    const info = status.info;
+    line.textContent = `RUNNING pid=${status.pid} · ${info.policy} · ${info.mode} · ${info.elapsed_s}s`;
+  } else if (status && status.running) {
+    line.textContent = "RUNNING (external terminal eval)";
+  } else {
+    line.textContent = "Idle — pick policy, checkpoint, time limit, then Start";
+  }
+}
+
+async function loadEvalOptions() {
+  const line = document.getElementById("eval-status-line");
+  try {
+    const r = await fetch("/api/eval/options");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    evalOptionsCache = data;
+    const d = data.defaults || {};
+    fillSelect(document.getElementById("eval-policy"), data.policies || [], null, null, d.policy || "act");
+    fillSelect(document.getElementById("eval-policy-base"), data.policy_bases || [], null, null, d.policy_base || "smolvla");
+    const ckpts = data.checkpoints || [];
+    if (!ckpts.length) {
+      const sel = document.getElementById("eval-checkpoint");
+      if (sel) {
+        sel.innerHTML = "";
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "(no checkpoints — train first)";
+        sel.appendChild(opt);
+      }
+    } else {
+      const prefer = ckpts.find((c) => c.name === `act_${d.dataset}`) || ckpts[0];
+      fillSelect(
+        document.getElementById("eval-checkpoint"),
+        ckpts,
+        "path",
+        "label",
+        prefer.path
+      );
+    }
+    fillSelect(
+      document.getElementById("eval-protocol"),
+      data.protocols || [],
+      "path",
+      "name",
+      d.protocol || ""
+    );
+    const ds = document.getElementById("eval-dataset");
+    if (ds && d.dataset) ds.value = d.dataset;
+    const dur = document.getElementById("eval-duration");
+    if (dur && d.duration) dur.value = d.duration;
+    const modeEl = document.getElementById("eval-mode");
+    if (modeEl && d.mode) modeEl.value = d.mode;
+    syncEvalModeVisibility();
+    syncEvalPolicyVisibility();
+    syncEvalWeightsForCheckpoint();
+    renderEvalStatus(data.status);
+  } catch (e) {
+    if (line) line.textContent = `Failed to load eval options: ${e.message || e}`;
+  }
+}
+
+async function startEvalFromDashboard() {
+  const checkpoint = document.getElementById("eval-checkpoint")?.value;
+  if (!checkpoint) {
+    toast("No checkpoint selected");
+    return;
+  }
+  const control = document.getElementById("eval-control")?.value || "act25";
+  let nActionSteps = 25;
+  if (control === "reactive") nActionSteps = 1;
+  if (control === "act5") nActionSteps = 5;
+  if (control === "act25" || control === "smooth") nActionSteps = 25;
+  if (control === "act200" || control === "ensemble") nActionSteps = 200;
+  const body = {
+    policy: document.getElementById("eval-policy")?.value || "act",
+    checkpoint,
+    weights: document.getElementById("eval-weights")?.value || "best_val",
+    dataset: document.getElementById("eval-dataset")?.value || "so101_bag_clip_bowl",
+    mode: document.getElementById("eval-mode")?.value || "protocol",
+    duration: Number(document.getElementById("eval-duration")?.value || 60),
+    protocol: document.getElementById("eval-protocol")?.value || "",
+    policy_base: document.getElementById("eval-policy-base")?.value || "smolvla",
+    n_action_steps: nActionSteps,
+  };
+  const line = document.getElementById("eval-status-line");
+  if (line) line.textContent = "Starting…";
+  try {
+    const r = await fetch("/api/eval/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    toast(`Eval started pid=${data.pid}`);
+    renderEvalStatus({
+      running: true,
+      pid: data.pid,
+      info: {
+        policy: data.policy,
+        mode: data.mode,
+        elapsed_s: 0,
+        checkpoint: data.checkpoint,
+      },
+    });
+  } catch (e) {
+    toast(String(e.message || e));
+    if (line) line.textContent = String(e.message || e);
+  }
+}
+
+async function stopEvalFromDashboard() {
+  try {
+    const r = await fetch("/api/eval/stop", { method: "POST" });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    toast(data.stopped ? "Eval stopped" : (data.hint || "No eval to stop"));
+    await loadEvalOptions();
+  } catch (e) {
+    toast(String(e.message || e));
+  }
+}
+
+function bindEvalForm() {
+  if (!document.getElementById("eval-form")) return;
+  document.getElementById("eval-mode")?.addEventListener("change", syncEvalModeVisibility);
+  document.getElementById("eval-policy")?.addEventListener("change", syncEvalPolicyVisibility);
+  document.getElementById("eval-checkpoint")?.addEventListener("change", syncEvalWeightsForCheckpoint);
+  document.getElementById("eval-start-btn")?.addEventListener("click", () => {
+    startEvalFromDashboard().catch(() => {});
+  });
+  document.getElementById("eval-stop-btn")?.addEventListener("click", () => {
+    stopEvalFromDashboard().catch(() => {});
+  });
+  loadEvalOptions().catch(() => {});
+  setInterval(() => {
+    fetch("/api/eval/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (s) renderEvalStatus(s);
+      })
+      .catch(() => {});
+  }, 2000);
+}
+
 // ---------------------- INITIALIZATION ---------------------- //
 
 bindLogs();
+bindEvalForm();
 refresh();
 refreshJoints().catch(() => {});
 

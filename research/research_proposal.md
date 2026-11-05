@@ -4,7 +4,7 @@
 
 **Author.** Romil Modi
 
-**Form.** PhD-style research programme in machine learning for visuomotor control. The full formulation, method, experimental design and pilot analysis are in [`paper/main.pdf`](paper/main.pdf).
+**Form.** PhD-style research programme in machine learning for visuomotor control. The full formulation, method, experimental design and pilot analysis are in [`paper/main.pdf`](paper/main.pdf) (updated November 2026).
 
 ## Thesis
 
@@ -33,17 +33,22 @@ Independent SO-101 benchmarks find grasp instability in more than 90% of failure
 ## Contributions
 
 1. A grasp-height error model under which the ROI median depth is a sufficient statistic for the unobserved vertical error, and a switched-policy formulation of the hybrid controller.
-2. A four-way controlled comparison of depth usage on one embodiment and one protocol.
+2. A four-way controlled comparison of depth usage on one embodiment and pre-registered evaluation protocols.
 3. An account of how an external override interacts with open-loop action chunking, with flush and blend hand-back rules.
 4. A learned gate whose labels are recovered from gripper closure in existing demonstrations.
 5. A powered, pre-registered single-cell evaluation protocol with a failure taxonomy and sequential testing.
 
 ## Scope
 
-In scope: ACT and SmolVLA, one SO-101 cell, one pick-and-place task, metric wrist depth from the D405, the protocol in `config/eval/pen_to_keys.yaml` extended with out-of-distribution conditions.
+In scope: ACT and SmolVLA, one SO-101 cell, pick-and-place tasks with metric wrist depth from the D405.
+
+- **Pre-registered powered matrix:** `config/eval/pen_to_keys.yaml` (keys in cup), extended with out-of-distribution conditions when phase 1 completes.
+- **Active development (Nov 2026):** bag-clip-in-bowl — dataset `so101_bag_clip_bowl`, protocol `config/eval/bag_clip_in_bowl.yaml`, ACT+ResNet-18+depth (chunk 100, `best_val`). Early protocol eval is logged under `outputs/eval/`; success trajectories can be saved to `so101_bag_clip_bowl_eval`. Interactive eval recipes: `config/recipes/act25.yaml`, `act200.yaml`, `reactive_act1.yaml`. HG-DAgger: `scripts/18_dagger.sh`, `19_train_dagger.sh`.
 
 Out of scope: new robot platforms, force sensing, residual reinforcement learning, and training a VLA from scratch. A lightweight depth adapter inside SmolVLA is a second-phase extension, not part of the first comparison.
 
 ## Programme
 
-Five phases, each gated by a deliverable: instrumentation of the logger and protocol; H1 and H2; distillation (H3); the learned gate (H4); the out-of-distribution split and synthesis. Detail, risks and the pilot analysis on fixture data are in the paper. No scored trials have been run yet.
+Five phases, each gated by a deliverable: instrumentation of the logger and protocol; H1 and H2; distillation (H3); the learned gate (H4); the out-of-distribution split and synthesis. Detail, risks and the pilot analysis on fixture data are in the paper.
+
+**Status (November 2026):** instrumentation for protocol eval, ZMQ Ethernet/Wi-Fi failover, dashboard eval control, `*_eval` success-demo export, and bag-clip data/training are in place. Exploratory bag-clip ACT protocol runs show roughly **15% success on incomplete runs** — not evidence for or against H1–H4. The pre-registered keys matrix at 30+ ID trials per row has **not** been completed; do not treat exploratory bag-clip logs as powered results.

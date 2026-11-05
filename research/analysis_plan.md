@@ -41,6 +41,15 @@ A result that misses its rule is reported in full. Rules are not relaxed after s
 
 Each comparison is a row in one table: successes/trials for both arms, Wilson intervals, the posterior probability, whether the sequential test terminated, and the failure-class breakdown. Fixture data currently in `assets/eval/` is illustrative and is never mixed with scored trials. Figures are regenerated from the trial logs with `research/scripts/make_figures.py --eval-json`.
 
+## Early bag-clip protocol logging (exploratory)
+
+As of November 2026, scored bag-clip-in-bowl runs write under `outputs/eval/` (per-checkpoint subfolders with `summary.json`, per-trial logs, and optional episode exports). These logs follow the same estimators and Wilson intervals as pre-registered trials, but **they do not yet meet the registered ID budget** on either protocol row; treat all bag-clip success rates as descriptive until the preregistration amendment promotes an endpoint or the keys matrix completes.
+
+- **Dataset for demos:** `data/datasets/so101_bag_clip_bowl/`.
+- **Success demos from eval:** when the operator marks a trial successful (`y`), autonomous trajectories append to `data/datasets/so101_bag_clip_bowl_eval/` (or `{base}_eval` for other base names). Analysis of success-demo counts is separate from protocol success rate unless episodes are deduplicated by trial ID.
+- **Reported early ACT baseline:** roughly 15% success on incomplete protocol eval — interval widths are wide; no hypothesis in the decision-rules table is accepted or rejected from this alone.
+- **Do not** merge bag-clip exploratory summaries with `assets/eval/` fixtures or with keys-protocol trials in a single pooled rate.
+
 ## What this plan does not do
 
 - No test on training loss. Training loss is a diagnostic and is not a manipulation result.

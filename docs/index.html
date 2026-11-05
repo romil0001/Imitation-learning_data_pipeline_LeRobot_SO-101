@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="SO-101 visuomotor manipulation: teleop, ACT training, protocol eval, real robot observations.">
+  <title>SO-101 Visuomotor Manipulation — Output Showcase</title>
+  <style>
+    :root {
+      --bg-app: #1a1a1a;
+      --bg-panel: #222222;
+      --bg-bar: #151515;
+      --border: #333333;
+      --text: #f0f0f0;
+      --muted: #9aa0a6;
+      --cyan: #4ed8d8;
+      --blue: #58a6ff;
+      --amber: #e3b341;
+      --ok: #3fb950;
+      --warn: #f7b731;
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --max: 1100px;
+      --radius: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--bg-app);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 1rem;
+    }
+
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .topbar {
+      background: var(--bg-bar);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.25rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .brand {
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--text);
+    }
+    .brand span { color: var(--cyan); }
+    nav { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; }
+    nav a { color: var(--muted); }
+    nav a:hover { color: var(--text); }
+
+    main { max-width: var(--max); margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    @media (min-width: 768px) {
+      .hero { grid-template-columns: 1.1fr 0.9fr; align-items: center; }
+    }
+    .hero h1 {
+      font-size: clamp(1.75rem, 4vw, 2.35rem);
+      line-height: 1.2;
+      margin: 0 0 0.75rem;
+      font-weight: 650;
+    }
+    .hero .lead { color: var(--muted); margin: 0 0 1.25rem; max-width: 38em; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .btn {
+      display: inline-block;
+      padding: 0.55rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      color: var(--text);
+    }
+    .btn-primary {
+      background: #1a3a3a;
+      border-color: #2a6a6a;
+      color: var(--cyan);
+    }
+    .hero-photo {
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      aspect-ratio: 4/3;
+      background: #111;
+    }
+    .hero-photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .caption {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+
+    section { margin-bottom: 3rem; }
+    section h2 {
+      font-size: 1.35rem;
+      margin: 0 0 0.35rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    section .sub { color: var(--muted); font-size: 0.95rem; margin: 0 0 1.25rem; }
+
+    .callout {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--amber);
+      padding: 1rem 1.15rem;
+      border-radius: var(--radius);
+      margin: 1rem 0;
+      font-size: 0.95rem;
+    }
+    .callout strong { color: var(--amber); }
+
+    /* System diagram */
+    .sys-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 640px) {
+      .sys-grid { grid-template-columns: 1fr auto 1fr; align-items: stretch; }
+    }
+    .sys-node {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.15rem;
+    }
+    .sys-node h3 {
+      margin: 0 0 0.5rem;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--cyan);
+    }
+    .sys-node ul {
+      margin: 0;
+      padding-left: 1.1rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .sys-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--blue);
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      padding: 0.5rem;
+    }
+    @media (max-width: 639px) {
+      .sys-arrow { transform: rotate(90deg); }
+    }
+    .zmq-pill {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.25rem 0.6rem;
+      background: #1a2a3a;
+      border: 1px solid #2a5570;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--cyan);
+    }
+
+    /* Pipeline */
+    .pipeline {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem 0.5rem;
+      font-size: 0.88rem;
+    }
+    .pipe-step {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.75rem;
+      border-radius: var(--radius);
+      white-space: nowrap;
+    }
+    .pipe-step em { color: var(--muted); font-style: normal; font-size: 0.8rem; }
+    .pipe-arrow { color: var(--muted); user-select: none; }
+
+    /* Image grids */
+    .grid-2 {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 560px) {
+      .grid-2 { grid-template-columns: 1fr 1fr; }
+    }
+    .grid-3 {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    figure {
+      margin: 0;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    figure img {
+      width: 100%;
+      height: auto;
+      display: block;
+      vertical-align: middle;
+    }
+    figcaption {
+      padding: 0.5rem 0.65rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    .eval-split {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 720px) {
+      .eval-split { grid-template-columns: 1fr 1fr; }
+    }
+    .eval-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .eval-card h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+    }
+    .tag-primary { background: #1a3a2a; color: var(--ok); border: 1px solid #2a5a3a; }
+    .tag-fixture { background: #2a2a1a; color: var(--warn); border: 1px solid #5a5a2a; }
+    .stat-box {
+      font-family: var(--mono);
+      font-size: 2rem;
+      color: var(--amber);
+      margin: 0.5rem 0;
+    }
+    .stat-note { font-size: 0.85rem; color: var(--muted); }
+
+    .links-grid {
+      display: grid;
+      gap: 0.5rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 480px) {
+      .links-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .links-grid a {
+      display: block;
+      padding: 0.65rem 0.85rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    .links-grid a:hover {
+      border-color: #2a6a6a;
+      text-decoration: none;
+    }
+    .links-grid small { display: block; color: var(--muted); margin-top: 0.15rem; }
+
+    footer {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 2rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">SO-101 <span>Visuomotor</span></div>
+      <nav aria-label="Sections">
+        <a href="#task">Task</a>
+        <a href="#system">System</a>
+        <a href="#observations">Observations</a>
+        <a href="#outcomes">Eval</a>
+        <a href="#pipeline">Pipeline</a>
+        <a href="#docs">Docs</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1>Output showcase</h1>
+        <p class="lead">
+          Real-robot visuomotor manipulation on a low-cost SO-101 dual-arm cell:
+          multi-view RGB, metric wrist depth, imitation learning (ACT), human-gated DAgger,
+          and protocol-based evaluation with <code style="font-family:var(--mono);font-size:0.9em">pc_success</code> reporting.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://github.com/romil0001/SO101_Visuomotor_Manipulation">GitHub repository</a>
+          <a class="btn" href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/README.md">README</a>
+        </div>
+      </div>
+      <div>
+        <div class="hero-photo">
+          <img src="showcase_assets/overhead_real.jpg" width="800" height="600" alt="Overhead view of SO-101 gripper, metal cup, and keys on the table">
+        </div>
+        <p class="caption">Overhead scene (keys/cup heritage setup; same cell as bag-clip task).</p>
+      </div>
+    </div>
+
+    <section id="task">
+      <h2>Task</h2>
+      <p class="sub">Primary development target and legacy evaluation protocol.</p>
+      <div class="callout">
+        <strong>Primary:</strong> <em>Place bag clip in bowl</em> —
+        protocol <code style="font-family:var(--mono);font-size:0.88em">config/eval/bag_clip_in_bowl.yaml</code>,
+        ~48 teleop episodes in <code style="font-family:var(--mono);font-size:0.88em">so101_bag_clip_bowl</code>,
+        default ACT baseline (ResNet-18 + depth tokens, chunk 100).
+      </div>
+      <p>
+        <strong>Heritage:</strong> pen-to-keys / keys-into-cup on the same hardware
+        (<code style="font-family:var(--mono);font-size:0.88em">config/eval/pen_to_keys.yaml</code>) —
+        used for README visuals, fixture eval summaries, and the pre-registered powered matrix in the research programme.
+      </p>
+    </section>
+
+    <section id="system">
+      <h2>Distributed sensing &amp; control</h2>
+      <p class="sub">Mac runs teleop, training, and eval; Omen publishes wrist + overhead streams over ZMQ.</p>
+      <div class="sys-grid">
+        <div class="sys-node">
+          <h3>Mac — control &amp; learning</h3>
+          <ul>
+            <li>Leader / follower SO-101 arms</li>
+            <li><code style="font-family:var(--mono)">python -m so101</code> CLI</li>
+            <li>Dashboard, record, train, eval</li>
+          </ul>
+        </div>
+        <div class="sys-arrow" aria-hidden="true">ZMQ RGB + depth →</div>
+        <div class="sys-node">
+          <h3>Omen — sensing</h3>
+          <ul>
+            <li>Intel D405 wrist (RGB + metric depth)</li>
+            <li>Overhead USB camera</li>
+            <li><code style="font-family:var(--mono)">publish_d405.py</code></li>
+          </ul>
+          <span class="zmq-pill">Ethernet → Wi‑Fi failover</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="observations">
+      <h2>Real observation frames</h2>
+      <p class="sub">Committed photos and illustrative condition layouts from <code style="font-family:var(--mono)">assets/frames/</code>.</p>
+      <div class="grid-2" style="margin-bottom:1.25rem">
+        <figure>
+          <img src="showcase_assets/overhead_real.jpg" loading="lazy" alt="Overhead real robot scene">
+          <figcaption>Overhead RGB — scene context</figcaption>
+        </figure>
+        <figure>
+          <img src="showcase_assets/wrist_real.jpg" loading="lazy" alt="Wrist ego view toward workspace">
+          <figcaption>Wrist RGB — ego view</figcaption>
+        </figure>
+      </div>
+      <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.75rem">Wrist depth &amp; contact-phase views (training / hybrid grasp):</p>
+      <div class="grid-3">
+        <figure>
+          <img src="showcase_assets/wrist_depth.png" loading="lazy" alt="Metric wrist depth map">
+          <figcaption>Depth (mm)</figcaption>
+        </figure>
+        <figure>
+          <img src="showcase_assets/wrist_approach.png" loading="lazy" alt="Approach phase">
+          <figcaption>Approach</figcaption>
+        </figure>
+        <figure>
+          <img src="showcase_assets/wrist_grasp.png" loading="lazy" alt="Grasp phase">
+          <figcaption>Grasp</figcaption>
+        </figure>
+      </div>
+      <p style="font-size:0.9rem;color:var(--muted);margin:1.25rem 0 0.75rem">Pen-to-keys condition layouts (fixture eval strata):</p>
+      <div class="grid-3">
+        <figure>
+          <img src="showcase_assets/overhead_keys_left.png" loading="lazy" alt="Keys left condition">
+          <figcaption>keys = left</figcaption>
+        </figure>
+        <figure>
+          <img src="showcase_assets/overhead_keys_center.png" loading="lazy" alt="Keys center condition">
+          <figcaption>keys = center</figcaption>
+        </figure>
+        <figure>
+          <img src="showcase_assets/overhead_keys_right.png" loading="lazy" alt="Keys right condition">
+          <figcaption>keys = right</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="outcomes">
+      <h2>Evaluation outcomes</h2>
+      <p class="sub">Reported manipulation performance uses protocol eval (<code style="font-family:var(--mono)">summary.json</code> → <code style="font-family:var(--mono)">pc_success</code>), not train loss.</p>
+      <div class="eval-split">
+        <div class="eval-card">
+          <span class="tag tag-primary">Bag clip in bowl · early runs</span>
+          <h3>Exploratory ACT protocol eval</h3>
+          <p class="stat-note">Incomplete budget — transparency only (see research paper § early scores).</p>
+          <div class="stat-box">~15%</div>
+          <p class="stat-note">Rough overall success on logged bag-clip runs to date. Not a substitute for the pre-registered keys matrix or fixture charts.</p>
+        </div>
+        <div class="eval-card">
+          <span class="tag tag-fixture">Pen-to-keys · fixture summaries</span>
+          <h3>Illustrative <code style="font-family:var(--mono);font-size:0.95em">pc_success</code> charts</h3>
+          <p class="stat-note">Generated from committed fixture JSON in <code style="font-family:var(--mono)">assets/eval/</code> (15 trials, 3 conditions).</p>
+          <div class="grid-2" style="margin-top:0.75rem">
+            <figure>
+              <img src="showcase_assets/success_overall.png" loading="lazy" alt="Overall success rate bar chart">
+              <figcaption>Overall</figcaption>
+            </figure>
+            <figure>
+              <img src="showcase_assets/success_by_condition.png" loading="lazy" alt="Success by condition bar chart">
+              <figcaption>By condition</figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <h2>Reproduction pipeline</h2>
+      <p class="sub">Default bag-clip workflow; optional HG-DAgger and compare-eval.</p>
+      <div class="pipeline" role="list">
+        <span class="pipe-step" role="listitem">Record <em>08_record.sh</em></span>
+        <span class="pipe-arrow" aria-hidden="true">→</span>
+        <span class="pipe-step" role="listitem">Train ACT <em>10_train_act.sh</em></span>
+        <span class="pipe-arrow" aria-hidden="true">→</span>
+        <span class="pipe-step" role="listitem">Eval <em>11_eval_act.sh</em> · recipe <em>act25.yaml</em></span>
+        <span class="pipe-arrow" aria-hidden="true">→</span>
+        <span class="pipe-step" role="listitem">HG-DAgger <em>18_dagger.sh</em></span>
+        <span class="pipe-arrow" aria-hidden="true">→</span>
+        <span class="pipe-step" role="listitem">Fine-tune <em>19_train_dagger.sh</em></span>
+        <span class="pipe-arrow" aria-hidden="true">→</span>
+        <span class="pipe-step" role="listitem">Re-eval + <em>compare-eval</em> Δpc_success</span>
+      </div>
+      <pre style="margin-top:1.25rem;padding:1rem;background:var(--bg-bar);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-family:var(--mono);font-size:0.78rem;color:var(--muted)">bash scripts/08_record.sh
+bash scripts/10_train_act.sh
+bash scripts/11_eval_act.sh          # → outputs/eval/.../summary.json
+bash scripts/18_dagger.sh
+bash scripts/19_train_dagger.sh
+POLICY_PATH=outputs/train/act_so101_bag_clip_bowl_dagger bash scripts/11_eval_act.sh
+python -m so101 compare-eval</pre>
+    </section>
+
+    <section id="docs">
+      <h2>Documentation &amp; research</h2>
+      <p class="sub">Deep dives on GitHub (blob links).</p>
+      <div class="links-grid">
+        <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/docs/reproduction.md">
+          Lab setup &amp; workflow
+          <small>docs/reproduction.md</small>
+        </a>
+        <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/docs/outcomes.md">
+          Outcome graphs &amp; metrics
+          <small>docs/outcomes.md</small>
+        </a>
+        <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/docs/methods.md">
+          Methods &amp; eval protocol
+          <small>docs/methods.md</small>
+        </a>
+        <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/docs/algorithms.md">
+          Algorithms &amp; policies
+          <small>docs/algorithms.md</small>
+        </a>
+        <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/docs/architecture.md">
+          Software architecture
+          <small>docs/architecture.md</small>
+        </a>
+        <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/research/README.md">
+          Research programme
+          <small>research/README.md</small>
+        </a>
+        <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/research/paper/main.tex">
+          LaTeX research paper
+          <small>research/paper/main.tex</small>
+        </a>
+        <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation/blob/main/assets/README.md">
+          Regenerate public assets
+          <small>assets/README.md</small>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a href="https://github.com/romil0001/SO101_Visuomotor_Manipulation">SO101_Visuomotor_Manipulation</a>
+    · MIT · Romil Modi · Static showcase — no build step.
+  </footer>
+</body>
+</html>

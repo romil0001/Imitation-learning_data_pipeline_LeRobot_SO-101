@@ -7,7 +7,61 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from so101.hardware import action_dict_from_qpos, qpos_from_obs, rgbs_from_obs
+
+
+def open_success_dataset(
+    *,
+    base_dataset_name: str,
+    success_dataset_name: str = "",
+    root: Path | None = None,
+) -> Any:
+    """Create or resume ``{base}_eval`` for autonomous success trajectories."""
+    from so101.config import project_root
+    from so101.dataset import JOINT_NAMES, DatasetMeta, SO101Dataset
+
+    proj = Path(root) if root is not None else project_root()
+    base = SO101Dataset(proj / "data" / "datasets" / base_dataset_name)
+    name = (success_dataset_name or "").strip() or f"{base_dataset_name}_eval"
+    dest = proj / "data" / "datasets" / name
+    fresh = DatasetMeta(
+        name=name,
+        fps=base.meta.fps,
+        joint_names=list(JOINT_NAMES),
+        camera_name=base.meta.camera_name,
+        camera_names=base.meta.names(),
+        camera_width=base.meta.camera_width,
+        camera_height=base.meta.camera_height,
+        task=base.meta.task,
+        episode_count=0,
+        use_depth=base.meta.use_depth,
+        depth_camera_name=base.meta.depth_camera_name,
+        depth_camera_names=base.meta.depth_names(),
+    )
+    if (dest / "meta.json").is_file():
+        dataset = SO101Dataset(dest)
+        if dataset.meta.episode_count == 0:
+            return SO101Dataset.create(dest, fresh)
+        if dataset.meta.names() != fresh.names() or bool(dataset.meta.use_depth) != bool(fresh.use_depth):
+            raise ValueError(
+                f"Success dataset at {dest} cameras={list(dataset.meta.names())} "
+                f"use_depth={dataset.meta.use_depth} does not match {base_dataset_name}."
+            )
+        if (
+            dataset.meta.camera_width != fresh.camera_width
+            or dataset.meta.camera_height != fresh.camera_height
+        ):
+            raise ValueError(
+                f"Success dataset at {dest} resolution "
+                f"{dataset.meta.camera_width}x{dataset.meta.camera_height} "
+                f"!= {fresh.camera_width}x{fresh.camera_height}"
+            )
+        print(f"Resuming success demos {dest} with {dataset.meta.episode_count} episodes", flush=True)
+        return dataset
+    print(f"Creating success demo dataset {dest}", flush=True)
+    return SO101Dataset.create(dest, fresh)
 
 
 def _dataset_home_qpos(root: Path, dataset_name: str) -> tuple[float, ...]:
@@ -32,12 +86,18 @@ def run_eval_loop(
     should_stop: Callable[[], bool] | None = None,
     depth_source: Any | None = None,
     depth_camera_name: str = "wrist",
+    writer: Any | None = None,
 ) -> int:
     names = list(camera_names) if camera_names else [str(camera_name)]
     policy.reset()
     t0 = now()
     steps = 0
     use_depth = bool(getattr(getattr(policy, "cfg", None), "use_depth", False))
+    record_depth_names: tuple[str, ...] = ()
+    if writer is not None:
+        record_depth_names = tuple(writer.dataset.meta.depth_names())
+        # Writer cameras are the source of truth for saved frames.
+        names = list(writer.dataset.meta.names())
     while True:
         if max_steps is not None and steps >= max_steps:
             break
@@ -50,15 +110,36 @@ def run_eval_loop(
         images = rgbs_from_obs(obs, names)
         image = images[0] if len(images) == 1 else images
         depth_u16 = None
-        if use_depth:
+        depths: dict[str, Any] | None = None
+        if use_depth or record_depth_names:
             if depth_source is None:
-                raise RuntimeError("depth_source required when policy uses depth")
-            depth_u16 = depth_source.latest_depth(depth_camera_name)
-            if depth_u16 is None:
-                raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
+                raise RuntimeError("depth_source required when policy/dataset uses depth")
+            if record_depth_names:
+                depths = {}
+                for dname in record_depth_names:
+                    z = depth_source.latest_depth(dname)
+                    if z is None:
+                        raise RuntimeError(f"No depth frame yet for {dname!r}")
+                    depths[dname] = z
+                depth_u16 = depths.get(depth_camera_name)
+                if depth_u16 is None:
+                    depth_u16 = next(iter(depths.values()))
+            else:
+                depth_u16 = depth_source.latest_depth(depth_camera_name)
+                if depth_u16 is None:
+                    raise RuntimeError(f"No depth frame yet for {depth_camera_name!r}")
         qpos = qpos_from_obs(obs)
         action = policy.select_action(image, qpos, depth_u16=depth_u16)
         follower.send_action(action_dict_from_qpos(action))
+        if writer is not None:
+            writer.add_frame(
+                state=qpos,
+                action=np.asarray(action, dtype=np.float32).reshape(-1),
+                timestamp=time.time(),
+                images={name: img for name, img in zip(names, images, strict=True)},
+                depths=depths,
+                depth_u16=None if depths is not None else depth_u16,
+            )
         try:
             from so101.live_viz import publish_live_joints
 
@@ -143,6 +224,8 @@ def eval_from_env(
     replan_threshold: int | None = None,
     low_pass_alpha: float | None = None,
     freespace_scale: float | None = None,
+    save_successes: bool = True,
+    success_dataset: str = "",
 ) -> int:
     from dataclasses import replace
 
@@ -237,6 +320,13 @@ def eval_from_env(
             run_id = time.strftime("%Y%m%d_%H%M%S")
             safe_name = Path(str(ckpt_label).replace("/", "_")).name
             run_dir = Path(output_dir) if output_dir else root / "outputs" / "eval" / safe_name / run_id
+            success_ds = None
+            if save_successes:
+                success_ds = open_success_dataset(
+                    base_dataset_name=dataset_name,
+                    success_dataset_name=success_dataset,
+                    root=root,
+                )
             kw = dict(
                 protocol=loaded,
                 follower=follower,
@@ -248,6 +338,8 @@ def eval_from_env(
                 reset_confirm=reset_confirm,
                 depth_source=depth_source,
                 depth_camera_name=depth_name,
+                success_dataset=success_ds,
+                policy_tag=policy if policy != "hybrid" else f"hybrid-{policy_base}",
             )
             if keys is not None:
                 summary = run_protocol(keys=keys, **kw)

@@ -21,6 +21,17 @@ improve grasp-phase reliability of RGB imitation policies more effectively as an
 analytic contact-phase override, as a model input, or as a training-time
 teacher, and does the benefit grow out of distribution?
 
+## Platform snapshot (November 2026)
+
+- **Tasks:** keys-in-cup (`config/eval/pen_to_keys.yaml`, pre-registered powered matrix) and **bag-clip-in-bowl** (`config/eval/bag_clip_in_bowl.yaml`, active real-robot development).
+- **Demonstrations:** `so101_bag_clip_bowl` (~48 episodes, RGB-D); default CLI/train/eval dataset name in the repo.
+- **Baseline policy:** ACT + ResNet-18 + depth tokens, chunk 100, `best_val` under `outputs/train/`.
+- **Eval:** protocol eval → `outputs/eval/<run>/`; dashboard launch; recipes `config/recipes/act25.yaml`, `act200.yaml`, `reactive_act1.yaml`.
+- **Infrastructure:** Omen ZMQ publisher with Ethernet-then-Wi-Fi failover (`ZMQ_HOSTS`); successful eval trajectories can append to `so101_bag_clip_bowl_eval`; HG-DAgger via `scripts/18_dagger.sh` / `19_train_dagger.sh`.
+- **Honest status:** exploratory bag-clip ACT protocol runs are logged but **incomplete** (~15% success on runs to date). No pre-registered powered comparison has been completed; paper fixtures remain illustrative.
+
+Code: [github.com/romil0001/SO101_Visuomotor_Manipulation](https://github.com/romil0001/SO101_Visuomotor_Manipulation)
+
 ## Building the paper
 
 ```bash
@@ -48,10 +59,3 @@ python research/scripts/make_figures.py \
 | `controller_response.pdf` | Closed-loop response of the shipped `DepthGraspController` against a 1-D plant. |
 | `chunk_override.pdf` | Schematic of the override / action-chunk interaction. |
 | `success_with_ci.pdf`, `posteriors.pdf` | Reporting pipeline applied to `assets/eval/` fixtures. Labelled illustrative; not measurements. |
-
-## Status
-
-No scored real-robot trials have been run under this programme yet. Everything
-quantitative in the paper is either a property of the protocol (interval
-widths, power), a property of the shipped controller (simulated response), or
-an explicitly labelled fixture.

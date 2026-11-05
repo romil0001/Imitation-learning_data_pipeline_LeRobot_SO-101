@@ -8,7 +8,7 @@ import numpy as np
 
 from so101.dataset import JOINT_NAMES, DatasetMeta, EpisodeWriter, SO101Dataset
 from so101.hardware import action_dict_from_qpos, qpos_from_obs, rgb_from_obs
-from so101.record import run_record_loop
+from so101.record import _wait_for_observation, run_record_loop
 from so101.replay import replay_episode
 
 
@@ -85,6 +85,77 @@ def test_record_saves_two_episodes_on_n(tmp_path: Path) -> None:
     assert ep0.num_frames == 3
     np.testing.assert_allclose(ep0.action[0], np.arange(6) + 10)
     assert len(follower.sent) >= 3
+
+
+def test_wait_for_observation_parks_home_on_stale_zmq() -> None:
+    class _Bus:
+        def sync_read(self, *_a, **_k):
+            # Joints still readable while cameras are stale.
+            return {n: float(i + 10) for i, n in enumerate(JOINT_NAMES)}
+
+    class FlakyFollower(FakeFollower):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fails_left = 2
+            self.bus = _Bus()
+            self.config = type("Cfg", (), {"num_read_retries": 0})()
+
+        def get_observation(self) -> dict:
+            if self.fails_left > 0:
+                self.fails_left -= 1
+                raise TimeoutError("latest frame is too old: 1027.3 ms")
+            return super().get_observation()
+
+    follower = FlakyFollower()
+    home = np.zeros(6, dtype=np.float32)
+    obs, did_park = _wait_for_observation(
+        follower, sleep=lambda _s: None, home_qpos=home, retries=5
+    )
+    assert "front" in obs
+    assert did_park is True
+    assert follower.fails_left == 0
+    assert len(follower.sent) > 0
+    np.testing.assert_allclose(follower.sent[-1], home, atol=1e-5)
+
+
+def test_record_discards_episode_after_camera_stall(tmp_path: Path) -> None:
+    ds = _ds(tmp_path)
+
+    class _Bus:
+        def sync_read(self, *_a, **_k):
+            return {n: 0.0 for n in JOINT_NAMES}
+
+    class StallThenOk(FakeFollower):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+            self.bus = _Bus()
+            self.config = type("Cfg", (), {"num_read_retries": 0})()
+
+        def get_observation(self) -> dict:
+            self.calls += 1
+            # After a few good frames, one stale burst, then recover.
+            if 3 <= self.calls <= 4:
+                raise TimeoutError("latest frame is too old")
+            return super().get_observation()
+
+    follower = StallThenOk()
+    # After stall+recover, save on next n
+    keys = FakeKeys({8: "n"})
+    saved = run_record_loop(
+        dataset=ds,
+        follower=follower,
+        leader=FakeLeader(),
+        camera_name="front",
+        fps=15,
+        keys=keys,
+        num_episodes=1,
+        home_qpos=np.zeros(6, dtype=np.float32),
+        sleep=lambda _s: None,
+    )
+    assert saved == 1
+    assert ds.meta.episode_count == 1
+
 
 
 def test_record_r_discards_then_saves(tmp_path: Path) -> None:

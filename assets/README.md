@@ -6,30 +6,31 @@ Committed figures for the GitHub README and documentation.
 
 **Real-robot photos (committed):**
 
-- `overhead_real.jpg` — scene view: gripper, metal cup, keys
+- `overhead_real.jpg` — scene view: gripper, metal cup, keys (legacy framing)
 - `wrist_real.jpg` — ego / wrist view looking toward the workspace
 
-Illustrative synthetic layouts (optional condition sketches) may also appear from
-`scripts/generate_public_assets.py`. Prefer the real photos for the README.
+Primary task today is **bag clip in bowl** (`so101_bag_clip_bowl`). Prefer fresh
+frames from that dataset for README updates.
 
-Replace or add more from recordings:
+Replace or add from recordings:
 
 ```bash
-python scripts/generate_public_assets.py --dataset-dir data/datasets/so101_d405_demo
+python scripts/generate_public_assets.py --dataset-dir data/datasets/so101_bag_clip_bowl
 git add assets/frames/
 ```
 
+Legacy keys demos: `data/datasets/so101_d405_demo`.
+
 ## Eval rate graphs (`graphs/`)
 
-Bar charts of **pc_success** overall and per condition (keys left / center / right).
-Built from fixture summaries in `eval/` until you have real eval logs.
+Bar charts of **pc_success** overall and per condition. The committed PNGs were
+built from **pen-to-keys fixture** summaries in `eval/` — illustrative only.
 
-Regenerate from a real eval run:
+Regenerate from a real bag-clip (or other) protocol run:
 
 ```bash
 python scripts/generate_public_assets.py \
-  --eval-dir outputs/eval/act_so101_d405_demo/<run_id> \
-  --eval-dir outputs/eval/hybrid_<run_id>
+  --eval-dir outputs/eval/act_so101_bag_clip_bowl/<run_id>
 ```
 
 Or refresh illustrative fixtures + graphs:

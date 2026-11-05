@@ -147,6 +147,33 @@ def test_apply_recipe_stacks_wrappers() -> None:
     out.base.base.close()
 
 
+def test_n_action_steps_disables_temporal_ensemble() -> None:
+    from so101.policy_wrappers import apply_inference_recipe
+
+    class _Cfg:
+        n_action_steps = 100
+        ensemble_temp = 0.01
+        use_depth = False
+        depth_camera_name = "wrist"
+
+    class _Ensembled:
+        def __init__(self) -> None:
+            self.cfg = _Cfg()
+            self._ensembler = object()
+            self._action_queue = deque([1, 2, 3])
+
+    policy = _Ensembled()
+    out = apply_inference_recipe(
+        policy,
+        RecipeConfig(n_action_steps=1, async_replan=False, low_pass_alpha=0.0, freespace_scale=1.0),
+    )
+    assert out is policy
+    assert out.cfg.n_action_steps == 1
+    assert out.cfg.ensemble_temp is None
+    assert out._ensembler is None
+    assert len(out._action_queue) == 0
+
+
 def test_gemfuse_registered() -> None:
     assert "gemfuse" in names("ml")
     assert get("gemfuse").load is not None

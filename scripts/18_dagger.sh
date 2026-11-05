@@ -27,11 +27,20 @@ banner_both_arms
 echo "Policy:      $POLICY_PATH  kind=$POLICY"
 echo "Demos:       $(dataset_local_root)"
 echo "Corrections: $ROOT/data/datasets/$CORRECTIONS_NAME"
+echo "Target:      ~${NUM_EPISODES} grasp-focused corrections (missed clip approaches)"
 echo "Keys: p = pause and move leader to follower"
 echo "      c = record the correction (only these frames are saved)"
 echo "      p = hand control back to the policy"
 echo "      n = save    r = discard    q = quit"
 echo "The leader stays still until you press p."
+echo "--------------------------------------------------------------"
+echo "Bag-clip focus (missed grasp):"
+echo "  Let the policy approach. When it misses or stalls near the clip,"
+echo "  press p → c, then guide approach + close gripper, then n."
+echo "  Prefer correcting the grasp phase, not the whole episode."
+echo "  After ~${NUM_EPISODES} saves: bash scripts/19_train_dagger.sh"
+echo "Jerky eval? Use CONTROL_MODE=act25 on scripts/11_eval_act.sh (not reactive)."
+echo "--------------------------------------------------------------"
 confirm_continue
 
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
@@ -45,3 +54,4 @@ run_logged dagger "$(conda_lerobot_python)" -m so101 dagger \
 
 echo
 echo "Next: bash scripts/19_train_dagger.sh"
+echo "Then:  bash scripts/20_rescore_compare.sh"

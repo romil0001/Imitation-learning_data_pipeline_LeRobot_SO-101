@@ -50,5 +50,5 @@ Lab safety and power rules. Research methods: [`methods.md`](methods.md).
 2. Mac: `bash scripts/06_teleoperate.sh`
 3. Mac: `bash scripts/08_record.sh` (~50 episodes for ACT; same cameras/task; data in `data/datasets/`)
 4. Mac: `bash scripts/10_train_act.sh` (MPS, hours — not the Omen; holds out episodes, writes `best_val`; depth used automatically if recorded; optional `--backend jax`)
-5. Mac: follower + Omen publisher → `bash scripts/11_eval_act.sh` (loads `best_val`; wrist depth fed to policy when trained with depth; scored pen-to-keys grid; reset scene, then **y**/**n** each trial; train loss is not the score; logs in `outputs/eval/`)
-6. Optional HG-DAgger: both arms + Omen → `bash scripts/18_dagger.sh` (**p** pause/sync, **c** record correction, **n** save) → `bash scripts/19_train_dagger.sh` → re-eval with `POLICY_PATH=outputs/train/act_so101_bag_clip_bowl_dagger` → `python -m so101 compare-eval`
+5. Mac: follower + Omen publisher → `bash scripts/11_eval_act.sh` (numbered menu: dataset from `data/datasets/*/meta.json`, checkpoint under `outputs/train/`, protocol `bag_clip_in_bowl.yaml` or timed; **control mode** default **act25**; loads `best_val`; wrist depth when trained with depth; reset scene, **y**/**n** each trial; **y** saves demos to `data/datasets/<dataset>_eval`; logs under `outputs/eval/`)
+6. Optional HG-DAgger: both arms + Omen → `bash scripts/18_dagger.sh` (**p** pause/sync, **c** record correction, **n** save) → `bash scripts/19_train_dagger.sh` → `bash scripts/20_rescore_compare.sh` (or re-eval + `python -m so101 compare-eval`)

@@ -336,10 +336,13 @@ def last_banner() -> tuple[str | None, str | None]:
 def session_state() -> str:
     recording = process_running("so101 record") or process_running("lerobot-record")
     teleop = process_running("lerobot-teleoperate")
+    evaluating = process_running("so101 eval")
     age = time.time() - _stats["last_ts"] if _stats["last_ts"] else 1e9
     omen_up = tcp_ok(CFG["zmq_host"], int(CFG.get("zmq_port") or "5555")) if CFG["backend"] == "zmq" else age < 2
     if recording:
         return "RECORDING"
+    if evaluating:
+        return "EVAL"
     if teleop:
         return "TELEOP"
     if not omen_up and age > 3:
@@ -347,7 +350,7 @@ def session_state() -> str:
     return "IDLE"
 
 def elapsed_s(state: str) -> float:
-    if state not in {"TELEOP", "RECORDING"}:
+    if state not in {"TELEOP", "RECORDING", "EVAL"}:
         return 0.0
     ts, _ = last_banner()
     if not ts:
@@ -561,6 +564,73 @@ def api_key(body: KeyBody):
         "listening": listening,
         "hint": None if listening else "No record/eval/dagger process is listening yet",
     }
+
+
+class EvalStartBody(BaseModel):
+    policy: str = "act"
+    checkpoint: str = Field(..., min_length=1)
+    weights: str = "best_val"
+    dataset: str = "so101_bag_clip_bowl"
+    mode: str = "protocol"
+    duration: float = 60.0
+    protocol: str = ""
+    policy_base: str = "smolvla"
+    grasp_config: str = ""
+    task: str = ""
+    n_trials: int | None = None
+    n_action_steps: int | None = 25
+    recipe: str = ""
+
+
+@app.get("/api/eval/options")
+def api_eval_options():
+    from dashboard.eval_launch import options_payload
+
+    return options_payload(ROOT)
+
+
+@app.get("/api/eval/status")
+def api_eval_status():
+    from dashboard.eval_launch import eval_status
+
+    return eval_status()
+
+
+@app.post("/api/eval/start")
+def api_eval_start(body: EvalStartBody):
+    from dashboard.eval_launch import start_eval
+
+    try:
+        return start_eval(
+            ROOT,
+            policy=body.policy,
+            checkpoint=body.checkpoint,
+            weights=body.weights,
+            dataset=body.dataset,
+            mode=body.mode,
+            duration=body.duration,
+            protocol=body.protocol,
+            policy_base=body.policy_base,
+            grasp_config=body.grasp_config,
+            task=body.task,
+            n_trials=body.n_trials,
+            n_action_steps=body.n_action_steps,
+            recipe=body.recipe,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.post("/api/eval/stop")
+def api_eval_stop():
+    from dashboard.eval_launch import stop_eval
+
+    try:
+        return stop_eval()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 @app.get("/api/log")
 def api_log():

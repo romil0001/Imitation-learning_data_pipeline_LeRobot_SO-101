@@ -19,6 +19,79 @@ def _busy_wait(elapsed: float, fps: int, sleep: Callable[[float], None]) -> None
         sleep(leftover)
 
 
+def _resolve_record_home(dataset: SO101Dataset) -> np.ndarray | None:
+    """Prefer protocol home_qpos, else mean of episode start poses."""
+    from so101.config import project_root
+    from so101.home import mean_start_qpos
+
+    proto = project_root() / "config" / "eval" / "bag_clip_in_bowl.yaml"
+    if proto.is_file():
+        try:
+            from so101.eval_protocol import load_protocol
+
+            loaded = load_protocol(proto)
+            if loaded.home_qpos:
+                return np.asarray(loaded.home_qpos, dtype=np.float32)
+        except Exception:
+            pass
+    if dataset.meta.episode_count > 0:
+        try:
+            return mean_start_qpos(dataset)
+        except Exception:
+            return None
+    return None
+
+
+def _park_follower_home(
+    follower: Any,
+    home_qpos: np.ndarray | None,
+    *,
+    sleep: Callable[[float], None],
+) -> None:
+    if home_qpos is None:
+        print("No home pose available — holding current joints until cameras recover.", flush=True)
+        return
+    from so101.home import interpolate_to_qpos
+
+    print("Stale camera frame — slowly returning follower to home…", flush=True)
+    try:
+        interpolate_to_qpos(follower, home_qpos, n_steps=80, dt=0.04, sleep=sleep)
+        print("Follower at home. Waiting for fresh ZMQ frames…", flush=True)
+    except Exception as exc:  # noqa: BLE001 — keep session alive
+        print(f"Home park failed ({exc}); waiting for cameras anyway.", flush=True)
+
+
+def _wait_for_observation(
+    follower: Any,
+    *,
+    sleep: Callable[[float], None],
+    home_qpos: np.ndarray | None,
+    retries: int = 120,
+    pause_s: float = 0.05,
+) -> tuple[Any, bool]:
+    """Return ``(obs, did_park)``. Parks to home once on the first stale frame."""
+    parked = False
+    last: BaseException | None = None
+    for attempt in range(max(1, retries)):
+        try:
+            return follower.get_observation(), parked
+        except TimeoutError as e:
+            last = e
+            if not parked:
+                _park_follower_home(follower, home_qpos, sleep=sleep)
+                parked = True
+            if attempt + 1 >= retries:
+                break
+            if (attempt + 1) % 20 == 0:
+                print(
+                    f"Still waiting for fresh ZMQ ({e}) — retry {attempt + 1}/{retries}",
+                    flush=True,
+                )
+            sleep(pause_s)
+    assert last is not None
+    raise last
+
+
 def run_record_loop(
     *,
     dataset: SO101Dataset,
@@ -32,6 +105,7 @@ def run_record_loop(
     depth_source: Any | None = None,
     depth_camera_name: str = "wrist",
     depth_camera_names: list[str] | None = None,
+    home_qpos: np.ndarray | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> int:
     """Record until num_episodes are saved (or until q). Returns saved count."""
@@ -41,6 +115,8 @@ def run_record_loop(
     )
     if not depth_names and dataset.meta.use_depth:
         depth_names = [depth_camera_name]
+    if home_qpos is None:
+        home_qpos = _resolve_record_home(dataset)
     saved = 0
     phase = "record"
     index = dataset.next_episode_index()
@@ -52,7 +128,27 @@ def run_record_loop(
 
     while True:
         t0 = time.perf_counter()
-        obs = follower.get_observation()
+        try:
+            obs, did_park = _wait_for_observation(follower, sleep=sleep, home_qpos=home_qpos)
+        except TimeoutError:
+            if phase == "record":
+                writer.abort()
+                print(
+                    f"Quit: cameras stayed stale; discarded unfinished episode {index:06d}",
+                    flush=True,
+                )
+            else:
+                print("Quit: cameras stayed stale during reset.", flush=True)
+            break
+        if did_park and phase == "record":
+            # Drop any frames captured before the stall; restart the same index.
+            writer.abort()
+            writer = EpisodeWriter(dataset, index, tags=tags)
+            print(
+                f"Camera stall — discarded in-progress episode {index:06d}; "
+                "recording restarts when you continue teleop (n=save r=redo q=quit)",
+                flush=True,
+            )
         action = leader.get_action()
         sent = follower.send_action(action)
         depths: dict[str, np.ndarray] | None = None
@@ -125,6 +221,7 @@ def record_from_env(
     from so101.config import load_cameras, load_ports, project_root
     from so101.dataset import DatasetMeta, compute_stats, write_stats
     from so101.hardware import make_follower, make_leader
+    from so101.home import safe_power_down
     from so101.keys import OperatorKeys
 
     ports = load_ports()
@@ -186,6 +283,10 @@ def record_from_env(
     if confirm:
         input("Confirm hardware, then press Enter (Ctrl-C to abort) ")
 
+    home_qpos = _resolve_record_home(dataset)
+    if home_qpos is not None:
+        print(f"Stale-cam home pose ready ({len(home_qpos)} joints)", flush=True)
+
     follower = make_follower(ports, cameras, with_cameras=True)
     leader = make_leader(ports)
     follower.connect()
@@ -212,11 +313,13 @@ def record_from_env(
                 depth_source=depth_source,
                 depth_camera_name=depth_name,
                 depth_camera_names=depth_names,
+                home_qpos=home_qpos,
             )
     finally:
         if depth_source is not None:
             depth_source.close()
         leader.disconnect()
+        safe_power_down(follower, home_qpos, sleep=time.sleep)
         follower.disconnect()
 
     if dataset.meta.episode_count > 0:

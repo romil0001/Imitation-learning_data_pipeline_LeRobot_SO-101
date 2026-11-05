@@ -6,7 +6,13 @@ Companion documents: [`research_proposal.md`](research_proposal.md), [`analysis_
 
 ## Task and success criterion
 
-Task string: *Place keys into metal cup*. A trial succeeds only if the keys are inside the metal cup, the gripper is clear of the keys, and nothing was knocked over. The criterion is the one committed in `config/eval/pen_to_keys.yaml` and is not reinterpreted per trial.
+### Primary pre-registration (keys in cup)
+
+Task string: *Place keys into metal cup*. A trial succeeds only if the keys are inside the metal cup, the gripper is clear of the keys, and nothing was knocked over. The criterion is the one committed in `config/eval/pen_to_keys.yaml` and is not reinterpreted per trial. The powered experiment matrix in this document applies to this protocol until a formal amendment moves the primary endpoint (see amendments below).
+
+### Development protocol (bag clip in bowl) — added Nov 2026
+
+Task string: *Place bag clip in bowl*. Success: bag clip inside the bowl, gripper clear of the clip, nothing knocked over. Frozen in `config/eval/bag_clip_in_bowl.yaml`. In-distribution conditions: `clip=left`, `clip=center`, `clip=right` (placement slots `pen: left|center|right`). This protocol is used for ongoing real-robot ACT/hybrid development and exploratory logging; **early ACT-only runs are incomplete and ~15% success overall to date**. They do not satisfy the trial budget or hypothesis decision rules below until explicitly promoted via amendment.
 
 ## Conditions
 
@@ -58,4 +64,11 @@ Binary success, primary failure class (grasp instability, repetition loop, state
 
 ## Amendments
 
-None yet.
+### 2026-11 — Bag-clip protocol and platform instrumentation (additive)
+
+- **Added** evaluation protocol `config/eval/bag_clip_in_bowl.yaml` and demonstration dataset `so101_bag_clip_bowl` (~48 teleoperated RGB-D episodes) as an active real-robot task alongside keys-in-cup. Default training/eval stack: ACT, ResNet-18 encoder, depth tokens, chunk length 100, checkpoint selection `best_val`.
+- **Added** logging path for scored runs: `outputs/eval/<policy>/<timestamp>/` via `python -m so101 eval --protocol config/eval/bag_clip_in_bowl.yaml` (and dashboard eval launch). Successful trials may append trajectories to `so101_bag_clip_bowl_eval` when marked successful.
+- **Added** interactive eval control recipes without changing success criteria: `config/recipes/act25.yaml`, `act200.yaml`, `reactive_act1.yaml`.
+- **Noted** platform features now shipped: ZMQ startup failover (Ethernet before Wi-Fi in `ZMQ_HOSTS`), HG-DAgger scripts `scripts/18_dagger.sh` and `scripts/19_train_dagger.sh`.
+- **Unchanged:** minimum 30 ID trials per matrix row, sequential cap 60, blinding and stopping rules for H1–H4 still refer to the keys protocol and arms A1–S3 until a future amendment designates bag-clip as the primary powered endpoint with the same budget.
+- **Transparency:** incomplete exploratory bag-clip ACT protocol scores (~15% success on runs logged so far) are **not** powered results and must not be used in place of the pre-registered keys comparison.

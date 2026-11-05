@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from so101.hardware import action_dict_from_qpos, qpos_from_obs
+from so101.hardware import action_dict_from_qpos, read_follower_qpos
 
 
 def mean_start_qpos(dataset: Any) -> np.ndarray:
@@ -30,7 +30,8 @@ def interpolate_to_qpos(
 ) -> None:
     if n_steps < 1:
         raise ValueError("n_steps must be >= 1")
-    current = qpos_from_obs(follower.get_observation())
+    # Bus-only read so park still works when ZMQ cameras are stale.
+    current = read_follower_qpos(follower)
     target = np.asarray(target, dtype=np.float32).reshape(-1)
     if target.shape[0] != current.shape[0]:
         raise ValueError(f"home qpos length {target.shape[0]} != {current.shape[0]}")
@@ -67,7 +68,7 @@ def safe_power_down(
                 sleep(hold_s)
         else:
             # Hold current pose briefly so the bus isn't cut mid-command.
-            q = qpos_from_obs(follower.get_observation())
+            q = read_follower_qpos(follower)
             for _ in range(max(1, int(0.5 / max(dt, 1e-3)))):
                 follower.send_action(action_dict_from_qpos(q))
                 if dt > 0:

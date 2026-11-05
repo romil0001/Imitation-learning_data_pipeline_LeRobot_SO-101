@@ -1,0 +1,9 @@
+# Queue 25 open-loop steps then replan (middle ground vs act1 / temporal ensemble).
+# Light EMA low-pass cuts chatter from short open-loop chunks (bag-clip jerk).
+name: act25
+base: act
+n_action_steps: 25
+async_replan: false
+replan_threshold: 25
+low_pass_alpha: 0.3
+freespace_scale: 1.0

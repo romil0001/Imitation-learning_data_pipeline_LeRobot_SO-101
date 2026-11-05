@@ -34,6 +34,17 @@ They do not learn a mapping from images to actions.
 | `protocol` | Conditions × trials, binary y/n | `--protocol config/eval/bag_clip_in_bowl.yaml` |
 | `convert` | LeRobot export (RGB only) for SmolVLA | `python -m so101 convert` |
 
+**Eval launcher (`bash scripts/11_eval_act.sh`, `15_eval_hybrid.sh`, …):** numbered
+menu over datasets with `data/datasets/<name>/meta.json` (not free-text), train runs
+under `outputs/train/`, protocol vs timed eval, and **control mode**:
+
+| Mode | Open-loop steps | Notes |
+|------|-----------------|--------|
+| `reactive` | 1 | Replan every step; twitchy on bag clip |
+| `act5` | 5 | Short queue |
+| `act25` (default) | 25 | `config/recipes/act25.yaml`, low-pass α=0.3 |
+| `act200` | up to 200 | Capped by checkpoint `chunk_size` (100 for current bag-clip ACT) |
+
 `hybrid` is setup: the grasp law is analytic. The base you name with
 `--policy-base` is the ML algorithm.
 
@@ -48,7 +59,7 @@ action = policy.select_action(images, state, depth_u16=depth)  # float32 [6]
 
 | | `images` | `state` / `action` | `depth_u16` |
 |--|----------|--------------------|-------------|
-| Shape | uint8 H×W×3, or a list in `camera.env` order (wrist, overhead) | float32 `[6]` | uint16 millimeters, or `None` |
+| Shape | uint8 H×W×3, or a list in `camera.env` order (typically wrist, overhead, base) | float32 `[6]` | uint16 millimeters, or `None` |
 | Order | — | `shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`, `wrist_roll`, `gripper` | Set `cfg.use_depth = True` to receive frames |
 
 Units match `state.npy` and `action.npy`.

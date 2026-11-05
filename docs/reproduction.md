@@ -22,8 +22,11 @@ On the Windows sensing node, only `omen/` is required after clone.
 | **HP Omen (Windows)** | D405 + overhead webcam → ZMQ publisher (no PyTorch) |
 
 ```text
-D405 (wrist) USB 3  ─┐
-USB webcam (overhead)─┴→  Omen (publish_d405.py :5555)  →  Wi-Fi  →  Mac
+D405 wrist + base (USB 3) ─┐
+USB webcam (overhead)      ─┴→  Omen (publish_d405.py :5555)
+                                    │  ZMQ_HOSTS: Ethernet first, Wi-Fi fallback
+                                    ▼
+                               Mac (so101, dashboard, arms)
 ```
 
 Librealsense on macOS usually cannot claim the D405 — keep the D405 on the Omen.
@@ -50,12 +53,12 @@ Full power table: [`checklist.md`](checklist.md).
 4. Follower only → `bash scripts/02_setup_motors_follower.sh`
 5. Leader only → `bash scripts/03_setup_motors_leader.sh`
 6. Calibrate → `bash scripts/04_calibrate_follower.sh` then `05_calibrate_leader.sh`
-7. `config/camera.env.example` → `config/camera.env`; set `ZMQ_HOST` to Omen LAN IP
+7. `config/camera.env.example` → `config/camera.env`; set `ZMQ_HOSTS` (e.g. `192.168.2.2,192.168.0.59`) and `CAMERA_NAMES=wrist,overhead,base`, `CAMERA_USE_DEPTH=true`
 
 ## Omen setup (Windows)
 
 1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-2. D405 on USB 3 (wrist); USB webcam (overhead)
+2. D405 on USB 3 (wrist + base per `publish_d405.py` flags); USB webcam (overhead)
 3. `omen\setup_omen.bat`
 4. `python omen\publish_d405.py --list-webcams` — pick USB cam index (not laptop cam)
 5. `omen\run_publish.bat` (XWF-1080P often `--webcam-index 2`)
@@ -67,15 +70,16 @@ Full power table: [`checklist.md`](checklist.md).
 conda activate lerobot
 bash scripts/09_dashboard.sh          # optional monitoring
 bash scripts/08_record.sh             # ~50 demos
-bash scripts/10_train_act.sh          # ACT
-bash scripts/11_eval_act.sh           # protocol eval → outcomes
+bash scripts/10_train_act.sh          # ACT → outputs/train/act_so101_bag_clip_bowl/ (chunk 100, ResNet18, depth if recorded; default 40k steps — runs may stop earlier once val plateaus)
+bash scripts/11_eval_act.sh           # interactive menu: dataset, checkpoint, protocol vs timed, control mode (default act25)
 bash scripts/18_dagger.sh             # HG-DAgger corrections (both arms ON)
 bash scripts/19_train_dagger.sh       # fine-tune ACT on demos + corrections
+bash scripts/20_rescore_compare.sh    # print re-eval + compare-eval commands (or run compare if env summaries set)
 POLICY_PATH=outputs/train/act_so101_bag_clip_bowl_dagger bash scripts/11_eval_act.sh
 python -m so101 compare-eval --baseline <baseline>/summary.json --candidate <dagger>/summary.json
 bash scripts/13_convert_lerobot.sh    # for SmolVLA
 bash scripts/14_train_smolvla.sh
-bash scripts/15_eval_hybrid.sh
+bash scripts/15_eval_hybrid.sh        # hybrid + config/hybrid_grasp.yaml
 ```
 
 Direct CLI equivalents:
@@ -92,4 +96,6 @@ python -m so101 compare-eval --baseline <a>/summary.json --candidate <b>/summary
 ```
 
 
-Eval artifacts: `outputs/eval/<checkpoint>/<run_id>/summary.json`.
+Eval artifacts: `outputs/eval/<checkpoint>/<run_id>/summary.json` when a protocol
+run completes; partial runs may lack `summary.json`. Operator log append:
+`outputs/session.log`. See [`eval_logs.md`](eval_logs.md).

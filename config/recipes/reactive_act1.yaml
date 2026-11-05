@@ -1,0 +1,9 @@
+# Closed-loop eval: replan every control step (rectify mistakes immediately).
+# Disables temporal ensembling via n_action_steps apply path.
+name: reactive_act1
+base: act
+n_action_steps: 1
+async_replan: false
+replan_threshold: 1
+low_pass_alpha: 0.0
+freespace_scale: 1.0

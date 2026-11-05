@@ -223,3 +223,87 @@ def test_eval_cli_accepts_protocol_and_n_trials() -> None:
     assert default.protocol == ""
     assert default.n_trials is None
     assert default.duration == 60.0
+    assert default.save_successes is True
+    assert default.success_dataset == ""
+    off = build_parser().parse_args(["eval", "--no-save-successes"])
+    assert off.save_successes is False
+
+
+def test_run_protocol_saves_success_episodes(tmp_path: Path) -> None:
+    from so101.dataset import DatasetMeta, JOINT_NAMES, SO101Dataset
+
+    base_root = tmp_path / "data" / "datasets" / "demo"
+    success_root = tmp_path / "data" / "datasets" / "demo_eval"
+    SO101Dataset.create(
+        base_root,
+        DatasetMeta(
+            name="demo",
+            fps=15,
+            joint_names=list(JOINT_NAMES),
+            camera_name="front",
+            camera_names=("front",),
+            camera_width=32,
+            camera_height=24,
+            task="Pick pen",
+            episode_count=0,
+            use_depth=False,
+        ),
+    )
+    # Reuse open_success_dataset against tmp project root layout
+    from so101.eval import open_success_dataset
+
+    success_ds = open_success_dataset(
+        base_dataset_name="demo",
+        success_dataset_name="demo_eval",
+        root=tmp_path,
+    )
+    assert success_ds.root == success_root
+
+    proto = load_protocol(_tiny_protocol_yaml(tmp_path))
+    keys = QueueKeys(
+        [
+            None,
+            None,
+            "y",  # success → save
+            None,
+            None,
+            "n",  # fail → discard
+            None,
+            None,
+            "y",
+            None,
+            None,
+            "n",
+        ]
+    )
+    summary = run_protocol(
+        protocol=proto,
+        follower=FakeFollower(),
+        policy=StubPolicy(),
+        camera_name="front",
+        fps=15,
+        run_dir=tmp_path / "run",
+        keys=keys,
+        n_trials=2,
+        reset_confirm=lambda *_a: None,
+        sleep=lambda _s: None,
+        max_steps=2,
+        success_dataset=success_ds,
+        policy_tag="act",
+    )
+    assert summary["n_success"] == 2
+    assert summary["n_saved_success"] == 2
+    assert success_ds.meta.episode_count == 2
+    ep0 = success_root / "episodes" / "000000"
+    assert (ep0 / "front.mp4").is_file()
+    assert (ep0 / "state.npy").is_file()
+    assert (ep0 / "action.npy").is_file()
+    meta = json.loads((ep0 / "episode.json").read_text())
+    assert meta["source"] == "eval_success"
+    assert "eval_success" in meta["tags"]
+    r0 = json.loads((tmp_path / "run" / "trials" / "0001" / "result.json").read_text())
+    assert r0["saved_episode"] == 0
+    r1 = json.loads((tmp_path / "run" / "trials" / "0002" / "result.json").read_text())
+    assert r1["success"] is False
+    assert r1["saved_episode"] is None
+    assert (success_root / "stats.json").is_file()

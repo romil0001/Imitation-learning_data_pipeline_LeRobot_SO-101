@@ -14,9 +14,10 @@ by this project (including HG-DAgger correction collection and fine-tune).
 ## Machines
 
 ```text
-D405 (wrist) USB 3  ─┐
-USB webcam (overhead)─┴→  HP Omen  (omen/publish_d405.py :5555)
-                              │  JPEG (+ optional Z16 depth) over ZMQ
+D405 wrist + base (USB 3) ─┐
+USB webcam (overhead)     ─┴→  HP Omen  (omen/publish_d405.py :5555)
+                              │  JPEG (+ Z16 depth on wrist/base) over ZMQ
+                              │  Ethernet preferred, Wi-Fi failover (ZMQ_HOSTS)
                               ▼
                          Mac  (so101 + dashboard + arms)
 Leader USB + follower USB ───►
@@ -25,7 +26,7 @@ Leader USB + follower USB ───►
 | Machine | Owns | Does not own |
 |---------|------|----------------|
 | **Mac** | Leader + follower USB, `python -m so101`, ACT train/eval, dashboard | D405 USB (Librealsense cannot claim it reliably on macOS) |
-| **HP Omen (Windows)** | Wrist D405 + overhead USB webcam, ZMQ publisher (Wi-Fi or direct Ethernet) | PyTorch, training, arm USB |
+| **HP Omen (Windows)** | Wrist + base D405, overhead USB webcam, ZMQ publisher (Ethernet preferred, Wi-Fi backup) | PyTorch, training, arm USB |
 
 Train ACT on the Mac (MPS). Never train on the 4 GB Omen.
 
@@ -54,7 +55,7 @@ Ports live in gitignored `config/ports.env`. Camera/ZMQ live in gitignored `conf
 | `replay` | Play one episode's `action.npy` on the follower |
 | `inspect` | Print `meta.json` / episode inventory |
 
-Numbered wrappers in `scripts/` call the same package (`08` record, `10` train, `11` eval, `12` replay, `13` convert, `14` SmolVLA, `15` hybrid, `18` DAgger, `19` DAgger train).
+Numbered wrappers in `scripts/` call the same package (`08` record, `10` train, `11`/`15`/`16`/`17` eval, `12` replay, `13` convert, `14` SmolVLA, `18` DAgger, `19` DAgger train, `20` rescore/compare hints + replay capture, `21` Ethernet link helper).
 
 LeRobot is imported only from `so101.hardware` (and SmolVLA wrap). Dataset I/O, models, and eval scoring do not go through Hub APIs.
 
@@ -101,7 +102,8 @@ episodes/000000/
   timestamps.npy
   wrist.mp4
   overhead.mp4
-  wrist_depth.npy    optional uint16 mm, aligned to color
+  base.mp4             when `CAMERA_NAMES` includes base
+  wrist_depth.npy      optional uint16 mm (wrist; base depth when recorded)
 ```
 
 Joint order is fixed: `shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`,
@@ -129,14 +131,17 @@ the depth-grasp override stay unchanged. See [`algorithms.md`](algorithms.md).
 
 Scored eval (`config/eval/bag_clip_in_bowl.yaml`): independent trials, binary
 success (**y**/**n**), small condition grid. Logs:
-`outputs/eval/<checkpoint>/<run_id>/`.
+`outputs/eval/<checkpoint>/<run_id>/` (see [`eval_logs.md`](eval_logs.md)).
 
 ## Operator site
 
 `bash scripts/09_dashboard.sh` → http://127.0.0.1:8080
 
-Live MJPEG (overhead, wrist, wrist depth), Omen/arm status, joint bars while
-recording, `outputs/session.log`. The dashboard does not start record or train.
+Live MJPEG (overhead, wrist, base, wrist depth), Omen/arm status, camera
+`link_mode` (`ethernet` / `wifi`), joint bars while recording, append-only
+`outputs/session.log` (via `run_logged` in numbered scripts). The dashboard does
+not start record or train; it can launch eval with the same control modes as
+`scripts/11_eval_act.sh`.
 
 ## Boundaries
 

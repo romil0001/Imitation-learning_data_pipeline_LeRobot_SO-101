@@ -128,6 +128,22 @@ def qpos_from_obs(obs: dict[str, Any]) -> np.ndarray:
     return np.array([float(obs[f"{name}.pos"]) for name in JOINT_NAMES], dtype=np.float32)
 
 
+def read_follower_qpos(follower: Any) -> np.ndarray:
+    """Read joint positions without requiring camera frames.
+
+    Prefer the Feetech bus so home/park still works when ZMQ RGB is stale.
+    Falls back to ``get_observation()`` for fakes / tests.
+    """
+    bus = getattr(follower, "bus", None)
+    if bus is not None and hasattr(bus, "sync_read"):
+        retries = int(getattr(getattr(follower, "config", None), "num_read_retries", 0) or 0)
+        raw = bus.sync_read("Present_Position", num_retry=retries)
+        obs = {f"{motor}.pos": val for motor, val in raw.items()}
+        return qpos_from_obs(obs)
+    return qpos_from_obs(follower.get_observation())
+
+
+
 def action_dict_from_qpos(qpos: np.ndarray) -> dict[str, float]:
     q = np.asarray(qpos, dtype=np.float32).reshape(-1)
     if q.shape[0] != len(JOINT_NAMES):

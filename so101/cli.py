@@ -152,6 +152,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
         replan_threshold=args.replan_threshold,
         low_pass_alpha=args.low_pass,
         freespace_scale=args.freespace_scale,
+        save_successes=bool(args.save_successes),
+        success_dataset=args.success_dataset,
     )
     return 0
 
@@ -306,6 +308,18 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--replan-threshold", type=int, default=None, help="Replan when queue length ≤ N (e.g. 25)")
     ev.add_argument("--low-pass", type=float, default=None, dest="low_pass", help="EMA alpha in (0,1]; 0 disables")
     ev.add_argument("--freespace-scale", type=float, default=None, help="Scale free-space joint deltas (e.g. 2.0)")
+    ev.add_argument(
+        "--save-successes",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="On protocol eval, save y=success rollouts into a dataset for fine-tune "
+        "(default: on → data/datasets/<dataset>_eval)",
+    )
+    ev.add_argument(
+        "--success-dataset",
+        default="",
+        help="Dataset name for eval successes (default: <dataset>_eval)",
+    )
     ev.add_argument("-y", "--yes", action="store_true")
     ev.set_defaults(func=cmd_eval)
 

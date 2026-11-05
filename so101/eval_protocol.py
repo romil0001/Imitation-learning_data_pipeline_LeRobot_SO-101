@@ -67,6 +67,7 @@ class TrialResult:
     steps: int
     early_stop: bool
     timeout_s: float
+    saved_episode: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -180,6 +181,8 @@ def run_protocol(
     max_steps: int | None = None,
     depth_source: Any | None = None,
     depth_camera_name: str = "wrist",
+    success_dataset: Any | None = None,
+    policy_tag: str = "act",
 ) -> dict[str, Any]:
     n = protocol.n_trials_per_condition if n_trials is None else int(n_trials)
     if n < 1:
@@ -192,9 +195,16 @@ def run_protocol(
     print(f"Task: {effective.task}", flush=True)
     print(f"Success: {effective.success_criterion}", flush=True)
     print(f"Timeout {effective.timeout_s}s  {n} trials × {len(effective.conditions)} conditions", flush=True)
+    if success_dataset is not None:
+        print(
+            f"Saving successful trials into {success_dataset.root} "
+            f"(resume count={success_dataset.meta.episode_count})",
+            flush=True,
+        )
 
     results: list[TrialResult] = []
     trial_index = 0
+    n_saved = 0
     for condition in effective.conditions:
         for trial_i in range(n):
             trial_index += 1
@@ -217,22 +227,57 @@ def run_protocol(
                 scored.append(verdict)
                 return True
 
-            steps = run_eval_loop(
-                follower=follower,
-                policy=policy,
-                camera_name=camera_name,
-                camera_names=camera_names,
-                fps=fps,
-                duration_s=effective.timeout_s,
-                max_steps=max_steps,
-                sleep=sleep,
-                now=now,
-                should_stop=should_stop,
-                depth_source=depth_source,
-                depth_camera_name=depth_camera_name,
-            )
+            writer = None
+            if success_dataset is not None:
+                from so101.dataset import EpisodeWriter
+
+                writer = EpisodeWriter(
+                    success_dataset,
+                    success_dataset.next_episode_index(),
+                    source="eval_success",
+                    intervention=False,
+                    tags=(
+                        "eval_success",
+                        f"condition={condition.id}",
+                        f"policy={policy_tag}",
+                    ),
+                )
+
+            try:
+                steps = run_eval_loop(
+                    follower=follower,
+                    policy=policy,
+                    camera_name=camera_name,
+                    camera_names=camera_names,
+                    fps=fps,
+                    duration_s=effective.timeout_s,
+                    max_steps=max_steps,
+                    sleep=sleep,
+                    now=now,
+                    should_stop=should_stop,
+                    depth_source=depth_source,
+                    depth_camera_name=depth_camera_name,
+                    writer=writer,
+                )
+            except Exception:
+                if writer is not None and not writer.is_saved:
+                    writer.abort()
+                raise
+
             early_stop = bool(scored)
             success = scored[0] if scored else _wait_for_score(keys, sleep)
+            saved_episode: int | None = None
+            if writer is not None:
+                if success and writer.num_frames > 0:
+                    folder = writer.save()
+                    saved_episode = writer.index
+                    n_saved += 1
+                    print(
+                        f"Saved success episode {writer.index:06d} → {folder}",
+                        flush=True,
+                    )
+                elif not writer.is_saved:
+                    writer.abort()
             result = TrialResult(
                 trial_index=trial_index,
                 condition_id=condition.id,
@@ -240,6 +285,7 @@ def run_protocol(
                 steps=steps,
                 early_stop=early_stop,
                 timeout_s=effective.timeout_s,
+                saved_episode=saved_episode,
             )
             results.append(result)
             trial_dir = run_dir / "trials" / f"{trial_index:04d}"
@@ -248,14 +294,29 @@ def run_protocol(
             (trial_dir / "result.json").write_text(json.dumps(result.to_dict(), indent=2) + "\n")
             mark = "SUCCESS" if success else "FAIL"
             print(
-                f"Trial {trial_index:04d} {condition.id} {mark}  steps={steps} early_stop={early_stop}",
+                f"Trial {trial_index:04d} {condition.id} {mark}  steps={steps} "
+                f"early_stop={early_stop}"
+                + (f"  saved={saved_episode:06d}" if saved_episode is not None else ""),
                 flush=True,
             )
 
     summary = summarize(results, [c.id for c in effective.conditions])
+    summary["n_saved_success"] = n_saved
+    if success_dataset is not None:
+        summary["success_dataset"] = str(success_dataset.root)
+        if n_saved > 0:
+            from so101.dataset import compute_stats, write_stats
+
+            write_stats(success_dataset.root, compute_stats(success_dataset))
+            print(
+                f"Updated {success_dataset.root}/stats.json  "
+                f"episodes={success_dataset.meta.episode_count}",
+                flush=True,
+            )
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(
-        f"pc_success={summary['pc_success']}  {summary['n_success']}/{summary['n_trials']}  logs={run_dir}",
+        f"pc_success={summary['pc_success']}  {summary['n_success']}/{summary['n_trials']}  "
+        f"saved={n_saved}  logs={run_dir}",
         flush=True,
     )
     return summary

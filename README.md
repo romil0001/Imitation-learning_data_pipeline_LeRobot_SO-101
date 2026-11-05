@@ -34,24 +34,30 @@ place to the base policy.
 
 ## Visualizations
 
+**Showcase (GitHub Pages):** [romil0001.github.io/SO101_Visuomotor_Manipulation](https://romil0001.github.io/SO101_Visuomotor_Manipulation/) · source [`docs/index.html`](docs/index.html)
+
 ### Real-robot observations
 
 | Overhead (scene) | Wrist (ego) |
 |:---:|:---:|
 | ![Overhead view of SO-101 gripper, metal cup, and keys](assets/frames/overhead_real.jpg) | ![Wrist camera view toward keys and cup](assets/frames/wrist_real.jpg) |
 
-Task scene: SO-101 follower gripper, stainless cup, and key ring on the table — the
-pen-to-keys / keys-into-cup manipulation setup used for teleop demos and protocol eval.
+Task scene (photo): early keys-in-cup layout — still useful for camera framing. **Primary
+task today:** *Place bag clip in bowl* on dataset `so101_bag_clip_bowl` with protocol
+[`config/eval/bag_clip_in_bowl.yaml`](config/eval/bag_clip_in_bowl.yaml). Legacy
+pen-to-keys eval: [`config/eval/pen_to_keys.yaml`](config/eval/pen_to_keys.yaml).
 
-### Eval success rates (pen-to-keys protocol)
+### Eval success rates (bag clip — early)
 
-Example outcomes — 5 trials × 3 conditions (15 trials total):
+Scored ACT on the bag-clip protocol is still **early / incomplete** (runs often end
+without a full grid or `summary.json`). So far: about **4 successes in ~27 trials
+(~15%)** — not a finished benchmark.
 
-| Overall pc_success | Success by condition |
+| Legacy fixture charts (pen-to-keys, illustrative) | |
 |:---:|:---:|
 | ![overall success](assets/graphs/success_overall.png) | ![by condition](assets/graphs/success_by_condition.png) |
 
-Fixture data: [`assets/eval/`](assets/eval/). Regenerate after real eval runs — see [`assets/README.md`](assets/README.md).
+Regenerate plots from real `outputs/eval/.../summary.json` — see [`assets/README.md`](assets/README.md).
 
 ## System overview
 
@@ -68,7 +74,7 @@ flowchart TB
   end
 
   subgraph omen["Omen — sensing"]
-    D405[D405 wrist]
+    D405[D405 wrist + base]
     CAM[Overhead USB]
     PUB[publish_d405.py]
     D405 --> PUB
@@ -103,12 +109,15 @@ cd SO101_Visuomotor_Manipulation
 bash env/setup_env.sh
 # configure config/ports.env and config/camera.env — see docs/reproduction.md
 bash scripts/08_record.sh
-bash scripts/10_train_act.sh
-bash scripts/11_eval_act.sh   # → outputs/eval/.../summary.json
-# optional interactive imitation:
+bash scripts/10_train_act.sh          # → outputs/train/act_so101_bag_clip_bowl/
+bash scripts/11_eval_act.sh           # interactive: dataset, checkpoint, protocol/timed, control mode
+# optional HG-DAgger:
 bash scripts/18_dagger.sh
 bash scripts/19_train_dagger.sh
+bash scripts/20_rescore_compare.sh    # re-eval + compare-eval hints
 POLICY_PATH=outputs/train/act_so101_bag_clip_bowl_dagger bash scripts/11_eval_act.sh
+# optional depth assist at contact:
+bash scripts/15_eval_hybrid.sh        # config/hybrid_grasp.yaml
 ```
 
 Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/reproduction.md).
@@ -124,6 +133,7 @@ Hardware setup, safety, and full command list: [`docs/reproduction.md`](docs/rep
 | [`research/`](research/README.md) | PhD-style ML research programme: proposal, pre-registration, LaTeX paper |
 | [`docs/architecture.md`](docs/architecture.md) | Software module map |
 | [`docs/reproduction.md`](docs/reproduction.md) | Lab setup and experiment workflow |
+| [`docs/eval_logs.md`](docs/eval_logs.md) | `outputs/eval/`, `session.log`, `summary.json` |
 | [`docs/checklist.md`](docs/checklist.md) | Power and labeling checklist |
 
 ## Citation

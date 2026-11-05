@@ -12,16 +12,16 @@ methodological detail and [`reproduction.md`](reproduction.md) for hardware setu
 | **Imitation policy** | ACT or fine-tuned SmolVLA checkpoint | `outputs/train/` |
 | **Autonomous rollout** | Closed-loop follower execution under a loaded policy | `outputs/eval/<checkpoint>/<run_id>/trials/` |
 | **Success rate** | Fraction of trials scored successful under a fixed protocol | `summary.json` → `pc_success` |
-| **Per-condition breakdown** | Success rate stratified by manipulation condition (e.g. object layout) | `summary.json` → `by_condition` |
+| **Per-condition breakdown** | Success rate stratified by manipulation condition (e.g. clip placement) | `summary.json` → `per_condition` |
 
 Train loss (`metrics.jsonl`) is a **training diagnostic**, not a reported outcome.
 Reported manipulation performance uses **protocol eval** only.
 
-Outcome graphs (mermaid): below. **Committed result plots:** [`assets/graphs/`](../assets/graphs/).
+Outcome graphs (mermaid): below. **Committed bar charts** under [`assets/graphs/`](../assets/graphs/) are **legacy pen-to-keys fixtures** — not bag-clip scores. See [Bag-clip early results](#bag-clip-early-results-incomplete).
 
-![Overall success rate](../assets/graphs/success_overall.png)
+![Legacy pen-to-keys fixture — overall](../assets/graphs/success_overall.png)
 
-![Success by condition](../assets/graphs/success_by_condition.png)
+![Legacy pen-to-keys fixture — by condition](../assets/graphs/success_by_condition.png)
 
 ## End-to-end outcome flow
 
@@ -30,7 +30,7 @@ flowchart LR
   subgraph acquisition["I. Data acquisition"]
     T[Leader teleoperation]
     F[Follower execution]
-    C[Wrist RGB + depth<br/>Overhead RGB]
+    C[Wrist + base RGB · wrist depth<br/>Overhead RGB]
     T --> F
     C --> D[(Episode store)]
     F --> D
@@ -69,7 +69,7 @@ observation modality and contact-phase control.
 
 ```mermaid
 flowchart TB
-  OBS["Observations at eval<br/>wrist RGB · overhead RGB · wrist depth Z16 · qpos"]
+  OBS["Observations at eval<br/>wrist · overhead · base RGB · wrist depth Z16 · qpos"]
 
   OBS --> ACTp["ACT<br/>RGB (+ depth in model)<br/>action chunks · temporal ensemble"]
   OBS --> SVp["SmolVLA<br/>RGB + language task<br/>no depth in backbone"]
@@ -120,7 +120,7 @@ After `python -m so101 eval --protocol config/eval/bag_clip_in_bowl.yaml`:
 ```text
 outputs/eval/<checkpoint>/<run_id>/
   protocol.json      # frozen protocol + checkpoint metadata
-  summary.json       # pc_success, by_condition, trial counts
+  summary.json       # pc_success, per_condition, trial counts
   trials/0001/
     trial.json       # success, steps, condition_id, early_stop
   trials/0002/
@@ -130,7 +130,7 @@ outputs/eval/<checkpoint>/<run_id>/
 `summary.json` fields used in papers/reports:
 
 - `pc_success` — overall success rate in [0, 1]
-- `by_condition` — map from condition id → `{successes, trials, rate}`
+- `per_condition` — map from condition id → `{n, n_success, pc_success}` (percent 0–100)
 - `n_trials` — total scored trials
 
 ## Depth-assisted grasp outcome
@@ -163,3 +163,26 @@ score, unless you add ablation conditions to the protocol YAML.
 | Hybrid (ACT + depth) | RGB + depth; depth at grasp only | analytic depth controller | same |
 
 Hold camera config, task string, and protocol YAML constant across rows.
+
+## Bag-clip early results (incomplete)
+
+Primary scored task: *Place bag clip in bowl* (`config/eval/bag_clip_in_bowl.yaml`),
+dataset `so101_bag_clip_bowl`, ACT checkpoint `outputs/train/act_so101_bag_clip_bowl`.
+
+| Report | Value |
+|--------|--------|
+| Scored trials so far | ~27 (mixed partial grids; not always 5×3) |
+| Successes | ~4 |
+| Rough rate | ~15% |
+| Protocol maturity | Early — many sessions end without writing `summary.json` |
+
+Treat these numbers as **work-in-progress**, not publishable benchmarks. After a
+full protocol run, use `summary.json` → `pc_success` and `per_condition` (conditions
+`clip=left` / `clip=center` / `clip=right`). Successful trials scored **y** can be
+saved to `data/datasets/so101_bag_clip_bowl_eval` for analysis or further training.
+
+### Historical pen-to-keys (legacy)
+
+Earlier cell task: keys into cup (`config/eval/pen_to_keys.yaml`, dataset
+`so101_d405_demo`). Fixture summaries in [`assets/eval/`](../assets/eval/) drove
+the committed README graphs; they are kept for illustration only.

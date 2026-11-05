@@ -248,9 +248,34 @@ def apply_n_action_steps(policy: Any, n_action_steps: int | None) -> None:
         apply_n_action_steps(base, n_action_steps)
 
 
+def disable_temporal_ensemble(policy: Any) -> None:
+    """Turn off overlapping-chunk ensembling so short action queues can replan.
+
+    With ``ensemble_temp`` set, ACT predicts every frame but blends with history,
+    which delays corrections. Queue mode (``n_action_steps``) needs the ensembler
+    off so open-loop steps are drained and a fresh chunk is requested.
+    """
+    cfg = getattr(policy, "cfg", None)
+    if cfg is not None and hasattr(cfg, "ensemble_temp"):
+        cfg.ensemble_temp = None
+    if hasattr(policy, "_ensembler"):
+        policy._ensembler = None
+    if hasattr(policy, "_action_queue"):
+        try:
+            policy._action_queue.clear()
+        except Exception:
+            pass
+    base = getattr(policy, "base", None)
+    if base is not None:
+        disable_temporal_ensemble(base)
+
+
 def apply_inference_recipe(policy: Any, recipe: RecipeConfig) -> Any:
-    """Order: act5 cfg → async replan (on chunk policy) → freepace → low-pass."""
+    """Order: actN cfg → drop temporal ensemble → async replan → freepace → low-pass."""
     apply_n_action_steps(policy, recipe.n_action_steps)
+    # Short closed-loop horizons need queue mode, not temporal ensembling.
+    if recipe.n_action_steps is not None:
+        disable_temporal_ensemble(policy)
 
     out = policy
     if recipe.async_replan:

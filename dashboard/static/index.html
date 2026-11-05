@@ -116,8 +116,69 @@
         .status-pill.idle { background: #222b3a; color: var(--preview-ghost); border-color: #304263; }
         .status-pill.teleop { background: #3a3219; color: var(--amber); border-color: #705820; }
         .status-pill.recording { background: #3a1a1a; color: #ff6b6b; border-color: #702525; animation: blink 1.2s infinite; }
+        .status-pill.eval { background: #1a2a3a; color: #4ed8d8; border-color: #2a5570; }
         .status-pill.ok { background: #132a1e; color: var(--status-ok); border-color: #1e5c3c; }
         .status-pill.bad { background: #331515; color: var(--status-err); border-color: #6e2020; }
+
+        .eval-form {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+        }
+        .eval-form label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.04em;
+        }
+        .eval-form select,
+        .eval-form input {
+            background: var(--bg-input);
+            color: var(--text-main);
+            border: 1px solid var(--border-panel);
+            border-radius: 3px;
+            padding: 4px 6px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+        .eval-form .eval-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .eval-form .eval-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .eval-form .eval-actions button {
+            flex: 1;
+            background: #2a2a2a;
+            color: #fff;
+            border: 1px solid var(--border-panel);
+            border-radius: 3px;
+            padding: 5px 8px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+        }
+        .eval-form .eval-actions button.primary {
+            background: #1a3a4a;
+            border-color: #2a5570;
+            color: var(--primary-cyan);
+            font-weight: bold;
+        }
+        .eval-form .eval-actions button:hover { background: #3a3a3a; }
+        .eval-form .eval-status {
+            color: var(--text-muted);
+            font-size: 10px;
+            min-height: 14px;
+        }
 
         @keyframes blink {
             0%, 100% { opacity: 1; }
@@ -594,10 +655,63 @@
                     <span onclick="minimizeWindow('win-hardware')">🗕</span>
                 </div>
             </div>
-            <div class="window-content" style="display:flex; flex-direction:column; gap:10px;">
+            <div class="window-content" style="display:flex; flex-direction:column; gap:10px; overflow:auto;">
                 <ul class="kv" id="hw">
                     <li><span class="k">Scanning Hardware…</span><span class="v">—</span></li>
                 </ul>
+
+                <div style="border-top:1px solid var(--border-line); padding-top:8px;">
+                    <div style="font-size:11px; font-weight:bold; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase;">Eval Launch</div>
+                    <div class="eval-form" id="eval-form">
+                        <div class="eval-row">
+                            <label>Policy
+                                <select id="eval-policy"></select>
+                            </label>
+                            <label id="eval-base-wrap">Base
+                                <select id="eval-policy-base"></select>
+                            </label>
+                        </div>
+                        <label>Checkpoint
+                            <select id="eval-checkpoint"></select>
+                        </label>
+                        <div class="eval-row">
+                            <label>Weights
+                                <select id="eval-weights">
+                                    <option value="best_val">best_val</option>
+                                    <option value="last">last</option>
+                                </select>
+                            </label>
+                            <label>Mode
+                                <select id="eval-mode">
+                                    <option value="protocol">protocol</option>
+                                    <option value="timed">timed</option>
+                                </select>
+                            </label>
+                        </div>
+                        <label id="eval-protocol-wrap">Protocol
+                            <select id="eval-protocol"></select>
+                        </label>
+                        <label id="eval-duration-wrap" style="display:none;">Time limit (s)
+                            <input id="eval-duration" type="number" min="5" step="5" value="60"/>
+                        </label>
+                        <label>Dataset
+                            <input id="eval-dataset" type="text" value="so101_bag_clip_bowl"/>
+                        </label>
+                        <label>Control (reactivity)
+                            <select id="eval-control">
+                                <option value="reactive">reactive (replan every step)</option>
+                                <option value="act5">act5 (queue 5)</option>
+                                <option value="act25" selected>act25 (queue 25 + low-pass)</option>
+                                <option value="act200">act200 (queue 200)</option>
+                            </select>
+                        </label>
+                        <div class="eval-actions">
+                            <button type="button" class="primary" id="eval-start-btn">Start eval</button>
+                            <button type="button" id="eval-stop-btn">Stop</button>
+                        </div>
+                        <div class="eval-status" id="eval-status-line">Loading checkpoints…</div>
+                    </div>
+                </div>
 
                 <div style="border-top:1px solid var(--border-line); padding-top:8px;">
                     <div style="font-size:11px; font-weight:bold; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase;">Operator Hotkeys</div>

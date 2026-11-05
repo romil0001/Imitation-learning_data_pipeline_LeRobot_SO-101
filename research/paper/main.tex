@@ -54,7 +54,7 @@ for Imitation-Learned Grasping on Force-Blind Low-Cost Manipulators\\[0.4em]
 \author{Romil Modi\\
 \small SO-101 Visuomotor Manipulation Platform\\
 \small\url{https://github.com/romil0001/SO101_Visuomotor_Manipulation}}
-\date{October 2026 \quad\textperiodcentered\quad Research proposal, version 1}
+\date{November 2026 \quad\textperiodcentered\quad Research proposal, version 1.1 (platform status update)}
 
 \begin{document}
 \maketitle
@@ -97,7 +97,7 @@ Is the benefit of depth larger out of distribution (table height, object scale, 
 \subsection{Planned contributions}
 \begin{enumerate}[leftmargin=*,itemsep=2pt]
   \item A formulation of depth-gated hybrid control as a switched policy with an explicit grasp-height error model, under which the ROI median depth is a sufficient statistic for the unobserved vertical error (\cref{sec:problem}).
-  \item A four-way controlled comparison of depth usage (none / input / override / distilled) for two policy classes on one embodiment and one protocol (\cref{sec:method,sec:design}).
+  \item A four-way controlled comparison of depth usage (none / input / override / distilled) for two policy classes on one embodiment and pre-registered evaluation protocols (\cref{sec:method,sec:design}).
   \item Identification and remediation of the interaction between external overrides and open-loop action chunking, which no prior work treats (\cref{sec:chunk}).
   \item A learned gate for learned-coarse / analytic-fine hybrids, trained from closure-onset labels recoverable from existing demonstrations (\cref{sec:gate}).
   \item A pre-registered, powered evaluation protocol for single-cell low-cost robots, with a failure taxonomy, recovery and time-to-grasp metrics, and sequential testing (\cref{sec:design}).
@@ -132,7 +132,7 @@ We consider a 6-DoF position-controlled arm with joint vector $\state_t\in\R^6$ 
 \obs_t = \big(\img^{\mathrm{w}}_t,\; \img^{\mathrm{o}}_t,\; \depthmap_t,\; \state_t\big),
 \qquad \img^{\cdot}_t\in\{0,\dots,255\}^{H\times W\times 3},\;\; \depthmap_t\in\R_{\ge 0}^{H\times W},
 \end{equation}
-where $\img^{\mathrm{w}}$ and $\img^{\mathrm{o}}$ are the wrist and overhead RGB frames and $\depthmap_t$ is the metric wrist depth map in millimetres, aligned to $\img^{\mathrm{w}}$. The action $\act_t\in\R^6$ is a vector of absolute joint targets in the same units as $\state_t$. There is no force, torque or current feedback, and no compliance: the servo tracks $\act_t$ with its own internal PID. The environment is a finite-horizon POMDP; the task is a single pick-and-place (``place keys into the metal cup'') with a binary terminal success $Y\in\{0,1\}$ judged by a human against a written criterion.
+where $\img^{\mathrm{w}}$ and $\img^{\mathrm{o}}$ are the wrist and overhead RGB frames and $\depthmap_t$ is the metric wrist depth map in millimetres, aligned to $\img^{\mathrm{w}}$. The action $\act_t\in\R^6$ is a vector of absolute joint targets in the same units as $\state_t$. There is no force, torque or current feedback, and no compliance: the servo tracks $\act_t$ with its own internal PID. The environment is a finite-horizon POMDP. The programme registers two pick-and-place tasks on the same cell---``place keys into the metal cup'' (\path{config/eval/pen_to_keys.yaml}) and ``place bag clip in bowl'' (\path{config/eval/bag_clip_in_bowl.yaml})---each with a binary terminal success $Y\in\{0,1\}$ judged by a human against a frozen written criterion.
 
 \subsection{Imitation learning with action chunks}
 
@@ -355,7 +355,11 @@ Orthogonal to H1--H4, two hand-back rules are compared within the hybrid: (a) \e
 \label{fig:views}
 \end{figure}
 
-The cell is a pair of SO-101 arms (leader for teleoperation, follower as the plant), six STS3215 servos per arm at 12\,V, an Intel RealSense D405 on the follower wrist (RGB and metric depth, aligned), and a USB overhead RGB camera. Sensing runs on a separate Windows node and is streamed over ZMQ; control, training and evaluation run on a Mac (\cref{fig:views}). The task is ``place keys into the metal cup''. Success requires the keys inside the cup, the gripper clear of the keys, and nothing knocked over; the criterion is frozen in the protocol file before any evaluation.
+The cell is a pair of SO-101 arms (leader for teleoperation, follower as the plant), six STS3215 servos per arm at 12\,V, an Intel RealSense D405 on the follower wrist (RGB and metric depth, aligned), and a USB overhead RGB camera. Sensing runs on a separate Windows node (HP Omen) and is streamed over ZMQ to a Mac that runs control, training and evaluation (\cref{fig:views}). Camera connectivity uses startup failover across \texttt{ZMQ\_HOSTS}: a direct Ethernet link is tried first, then Wi-Fi, so a dropped Wi-Fi path does not require manual reconfiguration.
+
+Two evaluation protocols are checked into the repository. The keys task (\path{pen_to_keys.yaml}) is the task named in the pre-registered powered matrix (\cref{tab:matrix}). The bag-clip-in-bowl task (\path{bag_clip_in_bowl.yaml}) is the active real-robot development target as of November 2026: teleoperated demonstrations live in \path{so101_bag_clip_bowl} (${\approx}48$ episodes, wrist and overhead RGB plus metric depth), and the default ACT baseline is ResNet-18 with depth tokens, chunk length $K=100$, trained to a \texttt{best\_val} checkpoint. Scored runs use the shared \emph{protocol eval} loop (\path{so101/eval\_protocol.py}): independent trials per condition, human \texttt{y}/\texttt{n} success, logs under \path{outputs/eval/}. Successful autonomous trajectories can be appended automatically to a companion dataset \path{so101_bag_clip_bowl_eval}. Interactive evaluation is exposed through the dashboard and recipe files \path{config/recipes/act25.yaml}, \path{act200.yaml} and \path{reactive_act1.yaml}, which trade open-loop chunk length, replanning and low-pass smoothing without changing the frozen success criterion. HG-DAgger correction collection and fine-tune scripts (\path{scripts/18_dagger.sh}, \path{19_train_dagger.sh}) extend the same pipeline. Repository: \url{https://github.com/romil0001/SO101_Visuomotor_Manipulation}.
+
+\textbf{Early bag-clip protocol scores (not a completed powered study).} Exploratory ACT-only protocol runs on bag-clip-in-bowl, logged under \path{outputs/eval/}, have not reached the pre-registered in-distribution budget (\cref{sec:stats}). On the incomplete runs recorded to date, success is roughly 15\% overall. These numbers are reported for transparency only; they do not support claims about hybrid depth, distillation, or learned gates, and they are not substituted for the fixture summaries in \cref{sec:pilot}.
 
 \subsection{Factors and conditions}
 
@@ -413,7 +417,7 @@ Success rates are reported with 95\% Wilson intervals~\citep{wilson1927}. Pairwi
 \Cref{fig:stats} quantifies the budget. With 15 trials an observed 10/15 has interval $[42\%,85\%]$; a per-condition 3/5 has $[23\%,88\%]$. With 15 trials per policy the Fisher test has 45\% power for a 40\% vs 80\% difference and 10\% for 60\% vs 80\%. We therefore pre-register \textbf{a minimum of 30 ID trials per row} (10 per key position), a sequential cap of 60, and treat 20-point effects as exploratory unless the sequential test terminates. OOD conditions are analysed as a secondary endpoint with the same machinery.
 
 \subsection{Threats to validity}
-\emph{Internal.} Operator reset variability is controlled by taped marks and photographed initial conditions; scorer bias by the blinding described above; threshold tuning leakage by fixing $\psi$ on a separate tuning set of ten rollouts before any scored trial. \emph{Construct.} Binary success hides contact-phase behaviour; the failure taxonomy and $e_{t_c}$ address this. \emph{External.} One cell, one task; results are claims about the SO-101 class and this task family, and the cross-platform question is explicitly out of scope for this programme.
+\emph{Internal.} Operator reset variability is controlled by taped marks and photographed initial conditions; scorer bias by the blinding described above; threshold tuning leakage by fixing $\psi$ on a separate tuning set of ten rollouts before any scored trial. \emph{Construct.} Binary success hides contact-phase behaviour; the failure taxonomy and $e_{t_c}$ address this. \emph{External.} One cell and a small task family (keys-in-cup, bag-clip-in-bowl); powered claims remain tied to the pre-registered protocol and budget until that budget is met. Cross-platform generalisation is explicitly out of scope.
 
 % ---------------------------------------------------------------------------
 \section{Pilot analysis on fixture data}
@@ -455,7 +459,7 @@ Success rates are reported with 95\% Wilson intervals~\citep{wilson1927}. Pairwi
 The programme is organised as five phases, each gated by a deliverable rather than a date.
 
 \begin{enumerate}[leftmargin=*,itemsep=3pt]
-\item \textbf{Instrumentation.} Add per-trial failure class, recovery events, time-to-closure and $e_{t_c}$ to the protocol logger; add Wilson intervals, Fisher/Beta comparison and a sequential-test stopping rule to the summary; add the \emph{flush} hand-back and an OOD condition set to the protocol YAML. Deliverable: a dry run of \cref{tab:matrix} rows A1 and A3 at 10 trials each with complete logs.
+\item \textbf{Instrumentation.} Add per-trial failure class, recovery events, time-to-closure and $e_{t_c}$ to the protocol logger; add Wilson intervals, Fisher/Beta comparison and a sequential-test stopping rule to the summary; add the \emph{flush} hand-back and an OOD condition set to the protocol YAML. \emph{Status (Nov 2026):} protocol eval, ZMQ failover, dashboard eval launch, success-demo export to \texttt{*\_eval} datasets, HG-DAgger scripts and the bag-clip protocol YAML are implemented; exploratory bag-clip ACT eval is logging under \path{outputs/eval/} but the powered matrix dry run on keys (A1/A3, 10 trials each) is not yet complete.
 \item \textbf{H1 and H2.} Record the demonstration corpus with depth; train A1, A2 and the SmolVLA fine-tune; run A1--A3 and S1--S2 to the pre-registered budget with interleaving and blinding. Deliverable: the first controlled answer to \cref{rq:proxy} and the in-distribution half of \cref{rq:where}.
 \item \textbf{H3.} Collect $\mathcal{D}_1$ from the A3 rollouts; retrain RGB-only ACT; run A5. Deliverable: whether depth can be removed at test time (\cref{rq:where}).
 \item \textbf{H4.} Extract closure-onset labels from the corpus; train $f_\phi$; run A4 and S3, plus the $d_{\mathrm{enter}}$ sensitivity sweep on A3/S2. Deliverable: \cref{rq:gate}.
@@ -475,7 +479,7 @@ Beyond the specific hypotheses, the programme contributes an evaluation standard
 % ---------------------------------------------------------------------------
 \section{Conclusion}
 
-We have cast the depth-assisted hybrid grasp of the SO-101 platform as a machine-learning research programme rather than a pipeline feature. The central object is a gated switched policy in which metric wrist depth stands in for the force feedback the embodiment lacks; the central question is where in the learning problem that depth should enter. The formulation yields four falsifiable hypotheses, an identified and remediable interaction with action chunking, a learned-gate extension whose labels come for free from existing demonstrations, and a powered, pre-registered real-robot protocol. The platform already implements the baseline and the override; the remaining work is measurement.
+We have cast the depth-assisted hybrid grasp of the SO-101 platform as a machine-learning research programme rather than a pipeline feature. The central object is a gated switched policy in which metric wrist depth stands in for the force feedback the embodiment lacks; the central question is where in the learning problem that depth should enter. The formulation yields four falsifiable hypotheses, an identified and remediable interaction with action chunking, a learned-gate extension whose labels come for free from existing demonstrations, and a powered, pre-registered real-robot protocol. As of November 2026 the repository implements the hybrid override, depth-in-ACT training, protocol eval on keys and bag-clip tasks, and the instrumentation needed for the pre-registered matrix; early bag-clip ACT scores remain low and incomplete. The remaining work is to run the powered comparisons to budget, not to claim them from pilot logs.
 
 % ---------------------------------------------------------------------------
 \bibliographystyle{plainnat}
@@ -527,7 +531,8 @@ Parameter & Value & Role \\
 \end{tabular}
 \end{table}
 
-\section{Evaluation protocol file}
+\section{Evaluation protocol files}
+Pre-registered powered matrix (\path{config/eval/pen_to_keys.yaml}):
 \begin{verbatim}
 task: Place keys into metal cup
 timeout_s: 60
@@ -543,6 +548,17 @@ conditions:
   # - {id: height+2cm,  pen: center, split: ood}
   # - {id: ring-large,  pen: center, split: ood}
   # - {id: distractors, pen: center, distractors: two, split: ood}
+\end{verbatim}
+Active development task (\path{config/eval/bag_clip_in_bowl.yaml}; amendment Nov 2026):
+\begin{verbatim}
+task: Place bag clip in bowl
+success_criterion: >
+  Bag clip is inside the bowl, gripper is clear of the clip, and nothing was
+  knocked over.
+conditions:
+  - {id: clip=left,   pen: left,   split: id}
+  - {id: clip=center, pen: center, split: id}
+  - {id: clip=right,  pen: right,  split: id}
 \end{verbatim}
 
 \end{document}

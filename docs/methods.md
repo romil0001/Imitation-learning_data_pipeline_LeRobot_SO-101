@@ -14,7 +14,8 @@ Can a **distributed visuomotor stack** on commodity hardware (Mac + Windows
 
 - **Plant:** SO-101 leader (teleoperator) + follower (executed plant), 6× STS3215
   @ 12V per arm
-- **Sensing:** Intel RealSense D405 (wrist RGB + metric depth), USB overhead RGB
+- **Sensing:** Intel RealSense D405 on wrist (RGB + metric depth) and base (RGB +
+  optional depth), USB overhead RGB
 - **Compute split:** Mac — control, learning, eval; HP Omen — camera publisher
   only (ZMQ JPEG + Z16 depth)
 - **Software boundary:** Hugging Face LeRobot for hardware I/O only; all dataset,
@@ -27,7 +28,9 @@ for installation.
 
 Leader joint commands are recorded as **actions**; follower joint states as
 **states**. Cameras are fixed at record and eval time via shared
-`config/camera.env` (`CAMERA_NAMES=wrist,overhead`, optional `CAMERA_USE_DEPTH`).
+`config/camera.env` (`CAMERA_NAMES=wrist,overhead,base`, optional `CAMERA_USE_DEPTH`).
+ZMQ prefers the first `ZMQ_HOSTS` entry (Ethernet), then Wi-Fi; the dashboard
+shows active `link_mode`.
 
 Episode schema (`data/datasets/<name>/`):
 
@@ -37,6 +40,7 @@ Episode schema (`data/datasets/<name>/`):
 | Command (action) | `action.npy` | float32 [T, 6] |
 | Wrist RGB | `wrist.mp4` | H×W×3, dataset fps |
 | Overhead RGB | `overhead.mp4` | H×W×3, dataset fps |
+| Base RGB | `base.mp4` | H×W×3, when base is in `CAMERA_NAMES` |
 | Wrist depth | `wrist_depth.npy` | uint16 mm, aligned to color |
 
 Joint order: `shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`,
@@ -57,11 +61,16 @@ learned map from cameras and joint state to a 6-D action. The lists, the shared
 
 Implementation follows Zhao et al. (2023) with LeRobot-aligned defaults:
 ResNet18 + FrozenBatchNorm, CVAE latent, 1 decoder layer (post-norm), action
-chunks of size 100, L1 + KL loss. Training: AdamW `lr=1e-5`,
+chunks of size 100, L1 + KL loss. Default train output:
+`outputs/train/act_so101_bag_clip_bowl/` (`scripts/10_train_act.sh`, up to 40k
+steps with `best_val` selection; effective step count may be lower). Training: AdamW `lr=1e-5`,
 `weight_decay=1e-4`, episode-level holdout (`val_frac=0.2`, fixed seed),
-checkpoint selection on offline `val_l1` (`best_val/`). Eval: temporal
-ensemble over overlapping chunks (`ensemble_temp=0.01`; set to `null` for
-open-loop action queue).
+checkpoint selection on offline `val_l1` (`best_val/`). **Eval control** (via
+`scripts/11_eval_act.sh` menu or `CONTROL_MODE=`): `reactive` (n=1),
+`act5`, `act25` (default — queue 25 + low-pass 0.3 in `config/recipes/act25.yaml`),
+`act200` (open-loop steps capped by trained `chunk_size`). Temporal ensemble
+(`ensemble_temp=0.01`) applies when no recipe overrides; set to `null` for a
+plain action queue.
 
 Optional: RGB + normalized wrist depth in the vision stack; JAX/Flax `tiny`
  backbone via `--backend jax`.
@@ -88,8 +97,12 @@ and fine-tunes from the baseline `best_val` into a new checkpoint directory.
 Re-score with the same protocol and diff the two `summary.json` files:
 
 ```bash
+bash scripts/20_rescore_compare.sh   # hints; optional BASELINE_SUMMARY + CANDIDATE_SUMMARY
 python -m so101 compare-eval --baseline <first>/summary.json --candidate <dagger>/summary.json
 ```
+
+Protocol eval saves trajectories scored **y** into `data/datasets/<dataset>_eval`
+(default on; disable with `--no-save-successes`).
 
 ### Hybrid (depth-assisted grasp)
 
@@ -108,7 +121,7 @@ success rates that reflect real task completion rather than training loss,
 support fair comparisons across policies, and produce logs suitable for a
 thesis or paper.
 
-- **Conditions:** small grid (e.g. key position left / center / right)
+- **Conditions:** clip placement left / center / right (`clip=left`, … in protocol YAML)
 - **Trials:** independent repetitions per condition
 - **Success:** binary human judgment after each rollout
 - **Primary metric:** `pc_success` in `summary.json`
