@@ -339,23 +339,30 @@ Orthogonal to H1--H4, two hand-back rules are compared within the hybrid: (a) \e
 
 \begin{figure}[t]
 \centering
-\begin{subfigure}[b]{0.36\textwidth}
-\includegraphics[width=\textwidth]{overhead_real}
-\caption{Overhead view: follower gripper, metal cup, key ring.}
+\begin{subfigure}[b]{0.32\textwidth}
+\includegraphics[width=\textwidth]{bagclip_overhead}
+\caption{Overhead RGB: bowl and bag clip.}
 \end{subfigure}\hfill
-\begin{subfigure}[b]{0.36\textwidth}
-\includegraphics[width=\textwidth]{wrist_real}
-\caption{Wrist (eye-in-hand) RGB.}
+\begin{subfigure}[b]{0.32\textwidth}
+\includegraphics[width=\textwidth]{bagclip_wrist}
+\caption{Wrist D405 RGB (eye-in-hand).}
 \end{subfigure}\hfill
-\begin{subfigure}[b]{0.25\textwidth}
-\includegraphics[width=\textwidth]{roi_overlay}
-\caption{Wrist depth with the controller's ROI (illustrative rendering).}
+\begin{subfigure}[b]{0.32\textwidth}
+\includegraphics[width=\textwidth]{bagclip_wrist_depth}
+\caption{Wrist depth (Z16) during the same frame.}
 \end{subfigure}
-\caption{Observation modalities on the SO-101 cell. (a) and (b) are real frames from the cell; (c) is the repository's placeholder depth rendering, used here only to show the ROI geometry. The ROI median of the real D405 frame is the scalar $d_t$ in \cref{eq:roi}.}
+\caption{Observation modalities on the SO-101 cell during bag-clip-in-bowl evaluation (real frames extracted from operator recording \texttt{so101\_rec\_2026-11-05T11-16-21-207Z.webm}). The ROI median of the wrist depth map is the scalar $d_t$ in \cref{eq:roi}.}
 \label{fig:views}
 \end{figure}
 
-The cell is a pair of SO-101 arms (leader for teleoperation, follower as the plant), six STS3215 servos per arm at 12\,V, an Intel RealSense D405 on the follower wrist (RGB and metric depth, aligned), and a USB overhead RGB camera. Sensing runs on a separate Windows node (HP Omen) and is streamed over ZMQ to a Mac that runs control, training and evaluation (\cref{fig:views}). Camera connectivity uses startup failover across \texttt{ZMQ\_HOSTS}: a direct Ethernet link is tried first, then Wi-Fi, so a dropped Wi-Fi path does not require manual reconfiguration.
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{bagclip_dashboard}
+\caption{Operator dashboard during ACT protocol eval on \texttt{so101\_bag\_clip\_bowl} (same recording). Multi-view RGB and depth, joint telemetry, Wi-Fi ZMQ link, and eval launcher are visible.}
+\label{fig:dashboard}
+\end{figure}
+
+The cell is a pair of SO-101 arms (leader for teleoperation, follower as the plant), six STS3215 servos per arm at 12\,V, an Intel RealSense D405 on the follower wrist (RGB and metric depth, aligned), a second D405 near the base, and a USB overhead RGB camera. Sensing runs on a separate Windows node (HP Omen) and is streamed over ZMQ to a Mac that runs control, training and evaluation (\cref{fig:views,fig:dashboard}). Camera connectivity uses startup failover across \texttt{ZMQ\_HOSTS}: a direct Ethernet link is tried first, then Wi-Fi, so a dropped Wi-Fi path does not require manual reconfiguration.
 
 Two evaluation protocols are checked into the repository. The keys task (\path{pen_to_keys.yaml}) is the task named in the pre-registered powered matrix (\cref{tab:matrix}). The bag-clip-in-bowl task (\path{bag_clip_in_bowl.yaml}) is the active real-robot development target as of November 2026: teleoperated demonstrations live in \path{so101_bag_clip_bowl} (${\approx}48$ episodes, wrist and overhead RGB plus metric depth), and the default ACT baseline is ResNet-18 with depth tokens, chunk length $K=100$, trained to a \texttt{best\_val} checkpoint. Scored runs use the shared \emph{protocol eval} loop (\path{so101/eval\_protocol.py}): independent trials per condition, human \texttt{y}/\texttt{n} success, logs under \path{outputs/eval/}. Successful autonomous trajectories can be appended automatically to a companion dataset \path{so101_bag_clip_bowl_eval}. Interactive evaluation is exposed through the dashboard and recipe files \path{config/recipes/act25.yaml}, \path{act200.yaml} and \path{reactive_act1.yaml}, which trade open-loop chunk length, replanning and low-pass smoothing without changing the frozen success criterion. HG-DAgger correction collection and fine-tune scripts (\path{scripts/18_dagger.sh}, \path{19_train_dagger.sh}) extend the same pipeline. Repository: \url{https://github.com/romil0001/SO101_Visuomotor_Manipulation}.
 
