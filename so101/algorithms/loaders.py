@@ -10,8 +10,19 @@ from so101.algorithms.registry import LoadContext, TrainContext
 
 def load_act(ctx: LoadContext) -> Any:
     from so101.models.act import ACTPolicy, find_policy_weights
+    from so101.models.lerobot_act_wrap import LeRobotACTPolicyWrap, resolve_lerobot_act_dir
 
     ckpt = Path(ctx.checkpoint) if ctx.checkpoint else ctx.root / "outputs" / "train" / f"act_{ctx.dataset_name}"
+    lerobot_dir = resolve_lerobot_act_dir(ckpt)
+    if lerobot_dir is not None:
+        return LeRobotACTPolicyWrap.load(
+            lerobot_dir,
+            device=ctx.device,
+            task=ctx.task,
+            camera_names=ctx.camera_names,
+            image_height=ctx.image_height,
+            image_width=ctx.image_width,
+        )
     find_policy_weights(ckpt)
     return ACTPolicy.load(ckpt, device=ctx.device)
 

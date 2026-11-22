@@ -1,5 +1,5 @@
 # Closed-loop eval: replan every control step (rectify mistakes immediately).
-# Disables temporal ensembling via n_action_steps apply path.
+# n_action_steps=1 clears temporal ensembling so each step is unblended.
 name: reactive_act1
 base: act
 n_action_steps: 1

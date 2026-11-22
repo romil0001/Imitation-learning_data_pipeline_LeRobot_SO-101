@@ -37,15 +37,17 @@ if [[ "$POLICY" == "act" || "$POLICY" == "act-jax" ]]; then
     echo "Checkpoint: $ck"
   elif [[ -f "$ck" && "$ck" == *.pt ]]; then
     echo "Checkpoint: $ck"
+  elif [[ -f "$ck/model.safetensors" && -f "$ck/config.json" ]]; then
+    echo "Checkpoint: $ck (LeRobot ACT)"
+  elif [[ -f "$ck/pretrained_model/model.safetensors" ]]; then
+    echo "Checkpoint: $ck/pretrained_model (LeRobot ACT)"
+  elif [[ -f "$ck/checkpoints/last/pretrained_model/model.safetensors" ]]; then
+    echo "Checkpoint: $ck/checkpoints/last/pretrained_model (LeRobot ACT)"
   else
-    # POLICY_PATH may already be .../last
-    if [[ -f "$ck/model.pt" || -f "$ck/model.msgpack" ]]; then
-      echo "Checkpoint: $ck"
-    else
-      echo "No ACT checkpoint at $POLICY_PATH (expected best_val/model.pt or last/model.pt)" >&2
-      echo "Train first: bash scripts/10_train_act.sh" >&2
-      exit 1
-    fi
+    echo "No ACT checkpoint at $POLICY_PATH" >&2
+    echo "Expected best_val/model.pt, last/model.pt, or a LeRobot pretrained_model/model.safetensors." >&2
+    echo "Train first: bash scripts/10_train_act.sh" >&2
+    exit 1
   fi
 fi
 

@@ -1,4 +1,4 @@
-"""python -m so101 {record,dagger,train,eval,replay,replay-capture,inspect,convert,algorithms,capture-home}"""
+"""python -m so101 {record,dagger,pseudo-dagger,train,eval,replay,replay-capture,inspect,convert,algorithms,capture-home}"""
 
 from __future__ import annotations
 
@@ -109,6 +109,27 @@ def cmd_dagger(args: argparse.Namespace) -> int:
         task=args.task,
         sync_steps=args.sync_steps,
         sync_dt=args.sync_dt,
+    )
+    return 0
+
+
+def cmd_pseudo_dagger(args: argparse.Namespace) -> int:
+    from so101.pseudo_dagger import pseudo_dagger_from_env
+
+    pseudo_dagger_from_env(
+        dataset_name=args.dataset,
+        corrections_name=args.corrections,
+        checkpoint=args.checkpoint,
+        num_episodes=args.num_episodes,
+        confirm=not args.yes,
+        policy=args.policy,
+        config_path=args.config,
+        task=args.task,
+        episode_duration_s=args.duration,
+        min_log_frames=args.min_log_frames,
+        save_all_frames=args.save_all,
+        n_action_steps=args.n_action_steps,
+        recipe=args.recipe,
     )
     return 0
 
@@ -261,6 +282,47 @@ def build_parser() -> argparse.ArgumentParser:
     dg.add_argument("--sync-dt", type=float, default=0.04)
     dg.add_argument("-y", "--yes", action="store_true")
     dg.set_defaults(func=cmd_dagger)
+
+    pdg = sub.add_parser(
+        "pseudo-dagger",
+        help="Depth pseudo-DAgger: auto-correct approach from wrist depth (no leader)",
+    )
+    pdg.add_argument("--dataset", default="so101_bag_clip_bowl")
+    pdg.add_argument(
+        "--corrections",
+        default="",
+        help="Where to store corrections (default <dataset>_pseudo_dagger)",
+    )
+    pdg.add_argument("--checkpoint", default="", help="ACT checkpoint directory")
+    pdg.add_argument("--num-episodes", type=int, default=10)
+    pdg.add_argument("--policy", choices=("act", "act-jax"), default="act")
+    pdg.add_argument(
+        "--config",
+        default="",
+        help="YAML config (default config/pseudo_dagger.yaml)",
+    )
+    pdg.add_argument("--task", default="")
+    pdg.add_argument("--duration", type=float, default=45.0, help="Seconds per collection episode")
+    pdg.add_argument(
+        "--min-log-frames",
+        type=int,
+        default=8,
+        help="Minimum corrected frames required to auto-save an episode",
+    )
+    pdg.add_argument(
+        "--save-all",
+        action="store_true",
+        help="Log every frame (hybrid-style rollout) instead of only nudged frames",
+    )
+    pdg.add_argument(
+        "--n-action-steps",
+        type=int,
+        default=5,
+        help="Base ACT queue length while collecting (5 = more reactive)",
+    )
+    pdg.add_argument("--recipe", default="", help="Optional inference recipe YAML")
+    pdg.add_argument("-y", "--yes", action="store_true")
+    pdg.set_defaults(func=cmd_pseudo_dagger)
 
     cmp = sub.add_parser("compare-eval", help="Diff two protocol summary.json files")
     cmp.add_argument("--baseline", required=True, help="summary.json or eval run directory")

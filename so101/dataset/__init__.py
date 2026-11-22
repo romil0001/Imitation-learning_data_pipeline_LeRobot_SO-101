@@ -10,6 +10,7 @@ from so101.dataset.tags import (
     derived_tags,
     effective_tags,
     eval_tags,
+    pseudo_dagger_tags,
     replay_capture_tags,
 )
 
@@ -28,5 +29,6 @@ __all__ = [
     "derived_tags",
     "effective_tags",
     "eval_tags",
+    "pseudo_dagger_tags",
     "replay_capture_tags",
 ]

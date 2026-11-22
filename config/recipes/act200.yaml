@@ -1,5 +1,5 @@
-# Queue 200 open-loop steps then replan (capped by checkpoint chunk_size).
-# Current bag-clip ACT is chunk_size=100 → effective 100 until you retrain with chunk 200.
+# act200: keep temporal ensembling + low-pass (same smooth path as act25).
+# n_action_steps is informational when ensemble_temp is set on the checkpoint.
 name: act200
 base: act
 n_action_steps: 200

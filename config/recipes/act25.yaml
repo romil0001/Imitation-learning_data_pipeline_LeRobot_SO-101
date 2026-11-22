@@ -1,5 +1,6 @@
-# Queue 25 open-loop steps then replan (middle ground vs act1 / temporal ensemble).
-# Light EMA low-pass cuts chatter from short open-loop chunks (bag-clip jerk).
+# act25: keep checkpoint temporal ensembling (smooth overlapping chunks) + light EMA.
+# n_action_steps is recorded for the launcher; ensemble path replans/blends every step.
+# Only reactive (n=1) disables the ensembler.
 name: act25
 base: act
 n_action_steps: 25

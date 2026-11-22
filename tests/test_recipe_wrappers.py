@@ -147,7 +147,7 @@ def test_apply_recipe_stacks_wrappers() -> None:
     out.base.base.close()
 
 
-def test_n_action_steps_disables_temporal_ensemble() -> None:
+def test_reactive_n1_disables_temporal_ensemble() -> None:
     from so101.policy_wrappers import apply_inference_recipe
 
     class _Cfg:
@@ -172,6 +172,34 @@ def test_n_action_steps_disables_temporal_ensemble() -> None:
     assert out.cfg.ensemble_temp is None
     assert out._ensembler is None
     assert len(out._action_queue) == 0
+
+
+def test_act25_keeps_temporal_ensemble() -> None:
+    from so101.policy_wrappers import apply_inference_recipe
+
+    class _Cfg:
+        n_action_steps = 100
+        ensemble_temp = 0.01
+        use_depth = False
+        depth_camera_name = "wrist"
+
+    class _Ensembled:
+        def __init__(self) -> None:
+            self.cfg = _Cfg()
+            self._ensembler = object()
+            self._action_queue = deque([1, 2, 3])
+
+    policy = _Ensembled()
+    marker = policy._ensembler
+    out = apply_inference_recipe(
+        policy,
+        RecipeConfig(n_action_steps=25, async_replan=False, low_pass_alpha=0.3, freespace_scale=1.0),
+    )
+    assert isinstance(out, LowPassPolicy)
+    assert out.base is policy
+    assert policy.cfg.n_action_steps == 25
+    assert policy.cfg.ensemble_temp == 0.01
+    assert policy._ensembler is marker
 
 
 def test_gemfuse_registered() -> None:

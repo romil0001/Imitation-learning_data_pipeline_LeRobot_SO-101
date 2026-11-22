@@ -27,6 +27,16 @@ def dagger_tags(policy: str, policy_base: str = "") -> list[str]:
     ]
 
 
+def pseudo_dagger_tags(policy: str = "act") -> list[str]:
+    return [
+        "method_pseudo_dagger",
+        "intervention",
+        "framework_so101",
+        "expert_depth_servo",
+        *_policy_framework_tags(policy, ""),
+    ]
+
+
 def eval_tags(policy: str, policy_base: str = "") -> list[str]:
     return [
         "success_eval",
@@ -47,6 +57,8 @@ def derived_tags(source: str, intervention: bool) -> list[str]:
         tags.extend(["success_collection", "method_teleop"])
     elif src == "dagger":
         tags.extend(["method_dagger", "intervention"])
+    elif src == "pseudo_dagger":
+        tags.extend(["method_pseudo_dagger", "intervention", "expert_depth_servo"])
     elif src == "replay_capture":
         tags.append("method_replay_capture")
     else:

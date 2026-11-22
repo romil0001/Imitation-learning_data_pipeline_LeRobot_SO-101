@@ -21,6 +21,8 @@ DEVICE="${DEVICE:-$(detect_torch_device)}"
 if [[ "$DEVICE" == "cuda" ]]; then
   BATCH_SIZE="${BATCH_SIZE:-8}"
 elif [[ "$DEVICE" == "mps" ]]; then
+  # Keep batch small on Apple Silicon — large batches + frame caches caused a
+  # memory-compressor / watchdog kernel panic under the streaming dataset.
   BATCH_SIZE="${BATCH_SIZE:-2}"
 else
   BATCH_SIZE="${BATCH_SIZE:-1}"

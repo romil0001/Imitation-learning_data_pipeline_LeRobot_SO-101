@@ -56,7 +56,18 @@ else
   LERO_TRAIN="lerobot-train"
 fi
 
-mkdir -p "$OUTPUT_DIR"
+# lerobot-train refuses to start if output_dir already exists and resume is false.
+# This script used to mkdir the dir first, which made every run fail immediately.
+if [[ -d "$OUTPUT_DIR" ]]; then
+  if [[ -z "$(ls -A "$OUTPUT_DIR")" ]]; then
+    rmdir "$OUTPUT_DIR"
+  else
+    echo "Output directory already has a run: $OUTPUT_DIR" >&2
+    echo "Use a new folder: OUTPUT_DIR=$ROOT/outputs/train/${JOB_NAME}_2 bash scripts/14_train_smolvla.sh" >&2
+    echo "Or resume that run with lerobot-train --resume=true --config_path=.../checkpoints/last/pretrained_model/train_config.json" >&2
+    exit 1
+  fi
+fi
 # SmolVLA base expects camera1/camera2/camera3; map our wrist+overhead and pad one empty cam.
 RENAME_MAP='{"observation.images.wrist":"observation.images.camera1","observation.images.overhead":"observation.images.camera2"}'
 run_logged train_smolvla "$LERO_TRAIN" \

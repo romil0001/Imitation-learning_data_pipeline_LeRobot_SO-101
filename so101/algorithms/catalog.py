@@ -82,6 +82,16 @@ def builtin_algorithms() -> list[Algorithm]:
             module="so101.dagger",
         ),
         Algorithm(
+            name="pseudo-dagger",
+            family="setup",
+            summary=(
+                "Depth pseudo-DAgger: wrist-depth blob servo auto-corrects approach "
+                "(no leader) and logs frames for fine-tune."
+            ),
+            run="bash scripts/22_pseudo_dagger.sh",
+            module="so101.pseudo_dagger",
+        ),
+        Algorithm(
             name="replay",
             family="setup",
             summary="Play one episode's action.npy open-loop on the follower.",

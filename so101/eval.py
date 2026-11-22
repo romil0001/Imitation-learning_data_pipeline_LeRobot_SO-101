@@ -106,7 +106,19 @@ def run_eval_loop(
         if should_stop is not None and should_stop():
             break
         loop_t = now()
-        obs = follower.get_observation()
+        obs = None
+        last_cam_err: BaseException | None = None
+        for _attempt in range(40):
+            try:
+                obs = follower.get_observation()
+                break
+            except TimeoutError as e:
+                # Wi-Fi ZMQ can briefly exceed the 1s read_latest age limit.
+                last_cam_err = e
+                sleep(0.05)
+        if obs is None:
+            assert last_cam_err is not None
+            raise last_cam_err
         images = rgbs_from_obs(obs, names)
         image = images[0] if len(images) == 1 else images
         depth_u16 = None
@@ -327,6 +339,19 @@ def eval_from_env(
                     success_dataset_name=success_dataset,
                     root=root,
                 )
+            if (
+                depth_source is None
+                and success_ds is not None
+                and success_ds.meta.depth_names()
+            ):
+                from so101.zmq_rgbd import LatestZMQRGBD
+
+                print(
+                    "Depth: saving success trials from ZMQ "
+                    f"({', '.join(success_ds.meta.depth_names())})",
+                    flush=True,
+                )
+                depth_source = LatestZMQRGBD(cam0.zmq_host, cam0.zmq_port)
             kw = dict(
                 protocol=loaded,
                 follower=follower,

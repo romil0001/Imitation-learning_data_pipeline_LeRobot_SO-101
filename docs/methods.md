@@ -66,11 +66,11 @@ chunks of size 100, L1 + KL loss. Default train output:
 steps with `best_val` selection; effective step count may be lower). Training: AdamW `lr=1e-5`,
 `weight_decay=1e-4`, episode-level holdout (`val_frac=0.2`, fixed seed),
 checkpoint selection on offline `val_l1` (`best_val/`). **Eval control** (via
-`scripts/11_eval_act.sh` menu or `CONTROL_MODE=`): `reactive` (n=1),
-`act5`, `act25` (default — queue 25 + low-pass 0.3 in `config/recipes/act25.yaml`),
-`act200` (open-loop steps capped by trained `chunk_size`). Temporal ensemble
-(`ensemble_temp=0.01`) applies when no recipe overrides; set to `null` for a
-plain action queue.
+`scripts/11_eval_act.sh` menu or `CONTROL_MODE=`): `reactive` (n=1, clears
+temporal ensemble), `act5`, `act25` (default — keeps `ensemble_temp` + low-pass
+0.3 in `config/recipes/act25.yaml`), `act200` (same smooth ensemble path).
+Temporal ensemble (`ensemble_temp=0.01`) stays on for act25/act200; only
+reactive disables it for unblended per-step corrections.
 
 Optional: RGB + normalized wrist depth in the vision stack; JAX/Flax `tiny`
  backbone via `--backend jax`.
@@ -103,6 +103,23 @@ python -m so101 compare-eval --baseline <first>/summary.json --candidate <dagger
 
 Protocol eval saves trajectories scored **y** into `data/datasets/<dataset>_eval`
 (default on; disable with `--no-save-successes`).
+
+### Depth pseudo-DAgger (no leader)
+
+`bash scripts/22_pseudo_dagger.sh` (or `python -m so101 pseudo-dagger`) rolls
+out ACT while a wrist-depth blob servo nudges `shoulder_pan` / lift joints
+whenever the nearest depth cluster is off-center or off the target range
+(`config/pseudo_dagger.yaml`). Frames with a large enough nudge are saved under
+`data/datasets/<dataset>_pseudo_dagger/`. Fine-tune like HG-DAgger:
+
+```bash
+CORRECTIONS_NAME=so101_bag_clip_bowl_pseudo_dagger \
+INIT_CHECKPOINT=outputs/train/act_so101_bag_clip_bowl_v2 \
+JOB_NAME=act_so101_bag_clip_bowl_pseudo \
+bash scripts/19_train_dagger.sh
+```
+
+Leader arm is not required. This teaches approach centering without teleop.
 
 ### Hybrid (depth-assisted grasp)
 

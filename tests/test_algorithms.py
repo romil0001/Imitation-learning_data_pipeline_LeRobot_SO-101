@@ -85,7 +85,6 @@ def test_every_ml_policy_can_load_for_eval() -> None:
     assert "hybrid" in runnable_names()
     assert "record" not in runnable_names()
 
-
 def test_catalog_text_keeps_the_families_apart() -> None:
     both = format_catalog()
     assert both.index("SETUP") < both.index("ML")

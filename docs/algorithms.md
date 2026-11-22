@@ -27,6 +27,7 @@ They do not learn a mapping from images to actions.
 | `teleoperate` | Leader drives follower, no logging | `bash scripts/06_teleoperate.sh` |
 | `record` | Demos → `data/datasets/<name>/` | `python -m so101 record` |
 | `dagger` | Policy rollout + human corrections only | `bash scripts/18_dagger.sh` |
+| `pseudo-dagger` | Policy + wrist-depth auto-corrections (no leader) | `bash scripts/22_pseudo_dagger.sh` |
 | `replay` | Open-loop `action.npy` | `python -m so101 replay` |
 | `home` | Joint-space move to the mean demo start | used by eval |
 | `depth-grasp` | Wrist-depth override near contact | `config/hybrid_grasp.yaml` |
@@ -40,10 +41,10 @@ under `outputs/train/`, protocol vs timed eval, and **control mode**:
 
 | Mode | Open-loop steps | Notes |
 |------|-----------------|--------|
-| `reactive` | 1 | Replan every step; twitchy on bag clip |
-| `act5` | 5 | Short queue |
-| `act25` (default) | 25 | `config/recipes/act25.yaml`, low-pass α=0.3 |
-| `act200` | up to 200 | Capped by checkpoint `chunk_size` (100 for current bag-clip ACT) |
+| `reactive` | 1 | Clears temporal ensemble; replan every step (twitchy) |
+| `act5` | 5 | Keeps ensemble when checkpoint has `ensemble_temp` |
+| `act25` (default) | 25 | Keeps ensemble + low-pass α=0.3 (`act25.yaml`) |
+| `act200` | up to 200 | Same smooth ensemble path + low-pass |
 
 `hybrid` is setup: the grasp law is analytic. The base you name with
 `--policy-base` is the ML algorithm.

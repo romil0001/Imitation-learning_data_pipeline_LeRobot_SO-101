@@ -160,7 +160,9 @@ class ACTChunkDataset(Dataset):
         stats: dict,
         episode_indices: list[int] | None = None,
         augment: bool = False,
-        max_cached_episodes: int = 12,
+        # Keep small: each cached episode holds full-res multi-cam RGB (+ depth).
+        # Large caches + DataLoader workers blew Mac unified memory (watchdog panic).
+        max_cached_episodes: int = 2,
     ) -> None:
         self.root = Path(root)
         self.ds = SO101Dataset(self.root)
@@ -438,8 +440,13 @@ def train(
     set_seed(seed)
 
     if num_workers is None:
-        cpu_count = os.cpu_count() or 4
-        num_workers = min(4, max(1, cpu_count // 2)) if device in ("cuda", "mps") else 0
+        # MPS shares CPU/GPU RAM; worker processes each clone the episode frame cache
+        # and can freeze the Mac (watchdog timeout). Keep workers CUDA-only.
+        if device == "cuda":
+            cpu_count = os.cpu_count() or 4
+            num_workers = min(4, max(1, cpu_count // 2))
+        else:
+            num_workers = 0
     pin_memory = device == "cuda"
 
     ds = SO101Dataset(dataset_root)
@@ -679,8 +686,12 @@ def train_from_env(
     if batch_size <= 0:
         if backend == "jax":
             batch_size = 4
+        elif device == "cuda":
+            batch_size = 8
+        elif device == "mps":
+            batch_size = 2
         else:
-            batch_size = 8 if device == "cuda" else 4
+            batch_size = 1
     out = Path(output_dir) if output_dir else root / "outputs" / "train" / f"act_{dataset_name}"
     cfg = ACTConfig(
         use_depth=meta.use_depth,

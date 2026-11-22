@@ -1,0 +1,36 @@
+# Depth pseudo-DAgger: automatic approach corrections from wrist depth (no leader).
+# ACT drives; when the nearest depth blob is off-center (or too far/near), nudge
+# shoulder_pan / lift joints and log those frames as expert corrections.
+enabled: true
+# Apply corrections while median blob depth is in this band (mm).
+# Start early so mid-reach (~0.5–1.0 m) still gets lateral nudges.
+approach_min_mm: 80.0
+approach_max_mm: 1100.0
+# Desired wrist-to-object depth during approach (mm).
+target_mm: 150.0
+tol_mm: 20.0
+min_mm: 40.0
+max_mm: 2000.0
+# Blob tracking ROI / band (same semantics as hybrid_grasp.yaml).
+track_roi_frac: 0.75
+track_band_mm: 50.0
+# Lateral: image offset_x in [-1,1] → degrees on shoulder_pan.
+gain_deg_per_norm: 10.0
+lateral_joints: [shoulder_pan]
+lateral_signs:
+  # Flip to -1.0 if the arm pans away from the blob.
+  shoulder_pan: 1.0
+# Vertical: (depth - target_mm) → degrees on lift joints.
+gain_deg_per_mm: 0.06
+vertical_joints: [shoulder_lift, elbow_flex]
+joint_signs:
+  shoulder_lift: 1.0
+  elbow_flex: 1.0
+max_delta_deg: 5.0
+# Only log a frame when ||a* - a_ACT||_inf exceeds this (degrees).
+log_delta_deg: 0.35
+# Blend: 1.0 = full overwrite of corrected joints; 0.5 = half ACT / half servo.
+blend: 1.0
+# Close gripper when near target (optional; usually leave false while collecting).
+close_gripper: false
+gripper_closed: 2.0

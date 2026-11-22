@@ -271,10 +271,12 @@ def disable_temporal_ensemble(policy: Any) -> None:
 
 
 def apply_inference_recipe(policy: Any, recipe: RecipeConfig) -> Any:
-    """Order: actN cfg → drop temporal ensemble → async replan → freepace → low-pass."""
+    """Order: actN cfg → (optional) drop temporal ensemble → async replan → freepace → low-pass."""
     apply_n_action_steps(policy, recipe.n_action_steps)
-    # Short closed-loop horizons need queue mode, not temporal ensembling.
-    if recipe.n_action_steps is not None:
+    # Temporal ensembling blends overlapping chunk predictions and is much smoother
+    # than a raw open-loop queue. Only reactive (n=1) clears it so every step is an
+    # unblended correction; act25/act200 keep ensemble_temp from the checkpoint.
+    if recipe.n_action_steps is not None and int(recipe.n_action_steps) <= 1:
         disable_temporal_ensemble(policy)
 
     out = policy
