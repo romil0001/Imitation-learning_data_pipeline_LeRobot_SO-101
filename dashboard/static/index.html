@@ -467,10 +467,35 @@
             font-size: 11px;
             font-family: var(--font-mono);
             color: var(--text-muted);
+            flex-shrink: 0;
         }
         .joint-legend .lg { display: flex; align-items: center; gap: 5px; }
         .joint-legend .state::before { content: ""; width: 8px; height: 8px; background: var(--preview-ghost); border-radius: 2px; }
         .joint-legend .action::before { content: ""; width: 8px; height: 8px; background: var(--teleop-amber); border-radius: 2px; }
+        .joint-legend .waves-hint { margin-left: auto; opacity: 0.7; font-size: 10px; }
+        .joint-telemetry {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .live-joint-waves {
+            width: 100%;
+            flex: 1 1 auto;
+            min-height: 160px;
+            background: #0a0c0f;
+            border: 1px solid var(--border-line);
+            border-radius: 4px;
+            display: block;
+        }
+        .joint-telemetry .joint-list {
+            flex: 0 0 auto;
+            max-height: 38%;
+            overflow: auto;
+            padding: 0;
+        }
 
         /* ---------------- HARDWARE KEY-VALUE ---------------- */
         .kv { list-style: none; margin: 0; padding: 0; }
@@ -634,11 +659,13 @@
                     <span onclick="minimizeWindow('win-joints')">🗕</span>
                 </div>
             </div>
-            <div class="window-content">
+            <div class="window-content joint-telemetry">
                 <div class="joint-legend">
                     <span class="lg state">State (Follower)</span>
                     <span class="lg action">Action (Leader Target)</span>
+                    <span class="lg waves-hint">live waves · last ~10s</span>
                 </div>
+                <canvas id="live-joint-waves" class="live-joint-waves" width="640" height="360" aria-label="Live joint waveforms"></canvas>
                 <div id="joints" class="joint-list">
                     <!-- Populated dynamically via read_live_joints() -->
                 </div>

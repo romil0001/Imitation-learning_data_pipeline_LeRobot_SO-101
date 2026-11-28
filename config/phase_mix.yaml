@@ -1,0 +1,56 @@
+# Phase-mix: far=ACT, mid=ACT+residual SAC, near=depth-grasp.
+# Online: bash scripts/24_residual_rl.sh  (CONFIG defaults here)
+# Eval:   python -m so101 eval --policy phase-mix ...
+
+phases:
+  # Mid for approach fix; hand off to grasp early so ACT doesn't drive through.
+  far_enter_mm: 380.0
+  near_enter_mm: 200.0
+
+grasp_config: config/hybrid_grasp.yaml
+
+# Mid-band residual; dampen as depth nears contact.
+control:
+  base_scale: 0.5
+  residual_scale: 0.85
+  low_pass_alpha: 0.25
+  # Slow arm more when d < approach_dampen_mm (stops “drive through”).
+  approach_dampen_mm: 260.0
+  approach_dampen_scale: 0.35
+  # Disabled — forced close was not helping.
+  auto_close: false
+  auto_close_tol_mm: 70.0
+  gripper_closed: 2.0
+
+reward:
+  target_mm: 95.0
+  approach_max_mm: 1100.0
+  track_roi_frac: 0.75
+  track_band_mm: 50.0
+  w_center: 1.5
+  w_depth: 1.5
+  w_time: 0.01
+  w_grasp: 5.0
+  w_close: 3.0
+  depth_scale_mm: 200.0
+  grasp_depth_tol_mm: 35.0
+  gripper_closed: 2.0
+  gripper_open: 55.0
+  stall_gap: 2.5
+  success_bonus: 10.0
+
+sac:
+  obs_dim: 9
+  act_dim: 6
+  hidden: 128
+  # Bigger mid-band corrections (gated — safer than always-on ±4°).
+  max_delta_deg: 4.0
+  gamma: 0.99
+  tau: 0.005
+  lr: 0.0005
+  alpha: 0.15
+  batch_size: 64
+  buffer_size: 50000
+  update_every: 1
+  updates_per_step: 2
+  start_learning_after: 128

@@ -1,0 +1,48 @@
+# Residual SAC on top of ACT with dense wrist-depth rewards.
+# Online: bash scripts/24_residual_rl.sh
+
+# Slow / smooth execution (reduces jerky ACT + residual).
+control:
+  # Scale ACT arm deltas toward current pose (1.0 = full speed).
+  base_scale: 0.55
+  # Full residual after actor (±max_delta_deg).
+  residual_scale: 1.0
+  # EMA on commanded joints (0 = off, 0.25 = heavy smooth).
+  low_pass_alpha: 0.2
+  # Force gripper closed when wrist depth is near target (stops nudge-without-grasp).
+  auto_close: true
+  auto_close_tol_mm: 45.0
+  gripper_closed: 2.0
+
+reward:
+  # Closer target so "near" means grasp range, not push-from-afar.
+  target_mm: 95.0
+  approach_max_mm: 1100.0
+  track_roi_frac: 0.75
+  track_band_mm: 50.0
+  w_center: 1.5
+  w_depth: 1.5
+  w_time: 0.01
+  w_grasp: 5.0
+  w_close: 3.0
+  depth_scale_mm: 200.0
+  grasp_depth_tol_mm: 35.0
+  gripper_closed: 2.0
+  gripper_open: 55.0
+  stall_gap: 2.5
+  success_bonus: 10.0
+
+sac:
+  obs_dim: 9
+  act_dim: 6
+  hidden: 128
+  max_delta_deg: 3.5
+  gamma: 0.99
+  tau: 0.005
+  lr: 0.0005
+  alpha: 0.12
+  batch_size: 64
+  buffer_size: 50000
+  update_every: 1
+  updates_per_step: 2
+  start_learning_after: 128

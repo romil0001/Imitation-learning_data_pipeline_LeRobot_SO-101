@@ -15,6 +15,7 @@ const toastEl = document.getElementById("toast");
 const jointsEl = document.getElementById("joints");
 const jointsMeta = document.getElementById("joints-meta");
 const jointsPanel = document.querySelector(".panel.joints, #win-joints");
+const liveWaveCanvas = document.getElementById("live-joint-waves");
 const liveMain = document.getElementById("live-main");
 const browseMain = document.getElementById("browse-main");
 const livePills = document.getElementById("live-pills");
@@ -38,6 +39,10 @@ let selectedIndex = null;
 let compareA = null;
 let compareB = null;
 const panes = { a: null, b: null };
+
+/** Rolling buffer for live joint waveforms (~10s at 10 Hz poll). */
+const LIVE_WAVE_MAX = 100;
+const liveWaveBuf = { names: [], state: [], action: [], lastTs: null };
 
 // ---------------------- UTILITY FUNCTIONS ---------------------- //
 
@@ -118,6 +123,123 @@ function ensureJointRows(names) {
   });
 }
 
+function pushLiveWaveSample(names, state, action, ts) {
+  if (ts != null && ts === liveWaveBuf.lastTs) return;
+  liveWaveBuf.lastTs = ts;
+  liveWaveBuf.names = names;
+  liveWaveBuf.state.push(state.slice());
+  liveWaveBuf.action.push(action.slice());
+  while (liveWaveBuf.state.length > LIVE_WAVE_MAX) {
+    liveWaveBuf.state.shift();
+    liveWaveBuf.action.shift();
+  }
+}
+
+function clearLiveWaveBuffer() {
+  liveWaveBuf.names = [];
+  liveWaveBuf.state = [];
+  liveWaveBuf.action = [];
+  liveWaveBuf.lastTs = null;
+}
+
+/** Draw scrolling live joint waveforms (state blue, action gold). */
+function drawLiveJointWaves() {
+  const canvas = liveWaveCanvas;
+  if (!canvas) return;
+  const parent = canvas.parentElement;
+  const cssW = Math.max(120, Math.floor(parent?.clientWidth || canvas.clientWidth || 320));
+  const cssH = Math.max(120, Math.floor(canvas.clientHeight || 240));
+  if (canvas.width !== cssW || canvas.height !== cssH) {
+    canvas.width = cssW;
+    canvas.height = cssH;
+  }
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#0a0c0f";
+  ctx.fillRect(0, 0, w, h);
+
+  const names = liveWaveBuf.names;
+  const nJ = names.length || (liveWaveBuf.state[0] || []).length;
+  if (!nJ || !liveWaveBuf.state.length) {
+    ctx.fillStyle = "#8b93a2";
+    ctx.font = "12px ui-monospace, Menlo, monospace";
+    ctx.fillText("Waiting for joint stream (record / teleop / eval)…", 12, h / 2);
+    return;
+  }
+
+  const rows = Math.max(1, nJ);
+  const rowH = h / rows;
+  let ymin = Infinity;
+  let ymax = -Infinity;
+  liveWaveBuf.state.forEach((s, i) => {
+    const a = liveWaveBuf.action[i] || [];
+    for (let j = 0; j < nJ; j += 1) {
+      ymin = Math.min(ymin, s[j], a[j] ?? s[j]);
+      ymax = Math.max(ymax, s[j], a[j] ?? s[j]);
+    }
+  });
+  if (!(ymax > ymin)) {
+    ymin -= 1;
+    ymax += 1;
+  }
+  const pad = (ymax - ymin) * 0.08 || 1;
+  ymin -= pad;
+  ymax += pad;
+
+  const n = liveWaveBuf.state.length;
+  const xAt = (i) => (i / Math.max(1, n - 1)) * (w - 8) + 4;
+  const yAt = (row, v) => row * rowH + 4 + (1 - (v - ymin) / (ymax - ymin)) * (rowH - 8);
+
+  for (let j = 0; j < nJ; j += 1) {
+    ctx.strokeStyle = "#1d232c";
+    ctx.beginPath();
+    ctx.moveTo(0, (j + 1) * rowH);
+    ctx.lineTo(w, (j + 1) * rowH);
+    ctx.stroke();
+
+    ctx.fillStyle = "#8b93a2";
+    ctx.font = "10px ui-monospace, Menlo, monospace";
+    ctx.fillText(names[j] || `j${j}`, 6, j * rowH + 12);
+
+    ctx.strokeStyle = "#7aa2ff";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    liveWaveBuf.state.forEach((s, i) => {
+      const x = xAt(i);
+      const y = yAt(j, s[j]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ctx.strokeStyle = "#e0b45c";
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    liveWaveBuf.action.forEach((a, i) => {
+      const x = xAt(i);
+      const y = yAt(j, a[j]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    const lastS = liveWaveBuf.state[n - 1];
+    const lastA = liveWaveBuf.action[n - 1] || lastS;
+    if (lastS) {
+      ctx.fillStyle = "#c8ced8";
+      ctx.textAlign = "right";
+      ctx.fillText(
+        `${Number(lastS[j]).toFixed(1)}° / ${Number(lastA[j]).toFixed(1)}°`,
+        w - 6,
+        j * rowH + 12
+      );
+      ctx.textAlign = "left";
+    }
+  }
+}
+
 /** Fetch and render real-time joint positions and commanded actions */
 async function refreshJoints() {
   if (mode !== "live") return;
@@ -130,6 +252,7 @@ async function refreshJoints() {
     if (!names.length) {
       if (jointsMeta) jointsMeta.textContent = "STANDBY";
       if (jointsPanel) jointsPanel.classList.add("stale");
+      drawLiveJointWaves();
       return;
     }
 
@@ -146,9 +269,14 @@ async function refreshJoints() {
       item.vals.textContent = `${Number(s).toFixed(1)}° / ${Number(a).toFixed(1)}°`;
     });
 
+    if (j.fresh) {
+      pushLiveWaveSample(names, state, action, j.ts);
+    }
+    drawLiveJointWaves();
+
     if (jointsMeta) {
       if (j.fresh) {
-        jointsMeta.textContent = "LIVE (30Hz)";
+        jointsMeta.textContent = "LIVE (waves)";
         jointsMeta.className = "muted ok";
         if (jointsPanel) jointsPanel.classList.remove("stale");
       } else {
@@ -1096,13 +1224,18 @@ bindLogs();
 bindEvalForm();
 refresh();
 refreshJoints().catch(() => {});
+drawLiveJointWaves();
+
+window.addEventListener("resize", () => {
+  drawLiveJointWaves();
+});
 
 // Poll hardware status every 1 second
 setInterval(() => {
   refresh().catch(() => {});
 }, 1000);
 
-// Poll joint telemetry at 10 Hz (100ms) for smooth bar animations
+// Poll joint telemetry at 10 Hz for smooth bars + live waves
 setInterval(() => {
   refreshJoints().catch(() => {});
 }, 100);

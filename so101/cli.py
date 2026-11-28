@@ -1,4 +1,4 @@
-"""python -m so101 {record,dagger,pseudo-dagger,train,eval,replay,replay-capture,inspect,convert,algorithms,capture-home}"""
+"""python -m so101 {record,dagger,pseudo-dagger,residual-rl,train,eval,replay,replay-capture,inspect,convert,algorithms,capture-home}"""
 
 from __future__ import annotations
 
@@ -134,6 +134,24 @@ def cmd_pseudo_dagger(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_residual_rl(args: argparse.Namespace) -> int:
+    from so101.rl.train_loop import residual_rl_from_env
+
+    residual_rl_from_env(
+        dataset_name=args.dataset,
+        checkpoint=args.checkpoint,
+        residual_checkpoint=args.residual_checkpoint,
+        output_dir=args.output_dir,
+        config_path=args.config,
+        num_episodes=args.num_episodes,
+        episode_duration_s=args.duration,
+        policy=args.policy,
+        confirm=not args.yes,
+        explore=not args.deterministic,
+    )
+    return 0
+
+
 def cmd_compare_eval(args: argparse.Namespace) -> int:
     from so101.compare_eval import compare_summaries, format_comparison, load_summary
 
@@ -156,6 +174,17 @@ def cmd_algorithms(args: argparse.Namespace) -> int:
 def cmd_eval(args: argparse.Namespace) -> int:
     from so101.eval import eval_from_env
 
+    policy = args.policy
+    policy_base = args.policy_base
+    # residual-rl / phase-mix were trained on ACT; don't inherit eval's default policy_base=smolvla
+    if str(policy).strip().lower() in {
+        "residual-rl",
+        "residual_rl",
+        "phase-mix",
+        "phase_mix",
+    } and str(policy_base).strip().lower() == "smolvla":
+        policy_base = "act"
+
     eval_from_env(
         checkpoint=args.checkpoint,
         dataset_name=args.dataset,
@@ -163,8 +192,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
         confirm=not args.yes,
         protocol=args.protocol,
         n_trials=args.n_trials,
-        policy=args.policy,
-        policy_base=args.policy_base,
+        policy=policy,
+        policy_base=policy_base,
         grasp_config=args.grasp_config,
         task=args.task,
         recipe=args.recipe,
@@ -173,6 +202,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
         replan_threshold=args.replan_threshold,
         low_pass_alpha=args.low_pass,
         freespace_scale=args.freespace_scale,
+        residual_checkpoint=args.residual_checkpoint,
         save_successes=bool(args.save_successes),
         success_dataset=args.success_dataset,
     )
@@ -324,13 +354,44 @@ def build_parser() -> argparse.ArgumentParser:
     pdg.add_argument("-y", "--yes", action="store_true")
     pdg.set_defaults(func=cmd_pseudo_dagger)
 
+    rrl = sub.add_parser(
+        "residual-rl",
+        help="Online residual SAC on ACT with dense wrist-depth rewards",
+    )
+    rrl.add_argument("--dataset", default="so101_bag_clip_bowl")
+    rrl.add_argument("--checkpoint", default="", help="Base ACT checkpoint directory")
+    rrl.add_argument(
+        "--residual-checkpoint",
+        default="",
+        help="Warm-start residual weights (outputs/train/residual_rl_act)",
+    )
+    rrl.add_argument("--output-dir", default="", help="Where to save residual_sac.pt")
+    rrl.add_argument(
+        "--config",
+        default="",
+        help="YAML (default config/phase_mix.yaml; use config/residual_rl.yaml for plain residual)",
+    )
+    rrl.add_argument("--num-episodes", type=int, default=20)
+    rrl.add_argument("--duration", type=float, default=45.0)
+    rrl.add_argument("--policy", default="act", help="Base ML policy (usually act)")
+    rrl.add_argument(
+        "--deterministic",
+        action="store_true",
+        help="No exploration noise (eval-style); default explores while learning",
+    )
+    rrl.add_argument("-y", "--yes", action="store_true")
+    rrl.set_defaults(func=cmd_residual_rl)
+
     cmp = sub.add_parser("compare-eval", help="Diff two protocol summary.json files")
     cmp.add_argument("--baseline", required=True, help="summary.json or eval run directory")
     cmp.add_argument("--candidate", required=True)
     cmp.add_argument("--output", default="", help="Optional JSON report path")
     cmp.set_defaults(func=cmd_compare_eval)
 
-    ev = sub.add_parser("eval", help="Run a registered ML policy, or hybrid (ML + depth grasp)")
+    ev = sub.add_parser(
+        "eval",
+        help="Run a registered ML policy, hybrid, residual-rl, or phase-mix",
+    )
     ev.add_argument("--dataset", default="so101_bag_clip_bowl")
 
     ev.add_argument("--checkpoint", default="")
@@ -344,7 +405,7 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument(
         "--policy",
         default="act",
-        help="ML algorithm, or hybrid. Names: python -m so101 algorithms",
+        help="ML algorithm, hybrid, residual-rl, or phase-mix. Names: python -m so101 algorithms",
     )
     ev.add_argument(
         "--policy-base",
@@ -354,7 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument(
         "--grasp-config",
         default="",
-        help="YAML/JSON for depth grasp (default: built-in; recommend config/hybrid_grasp.yaml)",
+        help="YAML/JSON for depth grasp (hybrid / phase-mix; recommend config/hybrid_grasp.yaml)",
     )
     ev.add_argument("--task", default="", help="Language task for SmolVLA (defaults to protocol.task)")
     ev.add_argument(
@@ -370,6 +431,11 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--replan-threshold", type=int, default=None, help="Replan when queue length ≤ N (e.g. 25)")
     ev.add_argument("--low-pass", type=float, default=None, dest="low_pass", help="EMA alpha in (0,1]; 0 disables")
     ev.add_argument("--freespace-scale", type=float, default=None, help="Scale free-space joint deltas (e.g. 2.0)")
+    ev.add_argument(
+        "--residual-checkpoint",
+        default="",
+        help="For --policy residual-rl / phase-mix: directory with residual_sac.pt",
+    )
     ev.add_argument(
         "--save-successes",
         action=argparse.BooleanOptionalAction,

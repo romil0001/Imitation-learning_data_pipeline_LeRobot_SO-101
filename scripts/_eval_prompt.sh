@@ -25,8 +25,16 @@ _eval_list_datasets() {
   done
 }
 
+_eval_is_smolvla_pretrained() {
+  # True if dir has LeRobot SmolVLA config.json (type=smolvla)
+  local dir="$1"
+  local cfg="$dir/config.json"
+  [[ -f "$cfg" ]] || return 1
+  grep -q '"type"[[:space:]]*:[[:space:]]*"smolvla"' "$cfg" 2>/dev/null
+}
+
 _eval_checkpoint_kind() {
-  # Prints: best_val | last | legacy | none  for a train run dir
+  # Prints: best_val | last | legacy | smolvla | none  for a train run dir
   local run="$1"
   if [[ -f "$run/best_val/model.pt" || -f "$run/best_val/model.msgpack" ]]; then
     echo best_val
@@ -34,9 +42,50 @@ _eval_checkpoint_kind() {
     echo last
   elif [[ -f "$run/model.pt" || -f "$run/model.msgpack" ]]; then
     echo legacy
+  elif _eval_is_smolvla_pretrained "$run/checkpoints/last/pretrained_model"; then
+    echo smolvla
+  elif compgen -G "$run/checkpoints/*/pretrained_model/config.json" >/dev/null 2>&1; then
+    local any=0
+    local p
+    for p in "$run"/checkpoints/*/pretrained_model; do
+      if _eval_is_smolvla_pretrained "$p"; then
+        any=1
+        break
+      fi
+    done
+    if [[ "$any" -eq 1 ]]; then
+      echo smolvla
+    else
+      echo none
+    fi
   else
     echo none
   fi
+}
+
+_eval_run_matches_policy() {
+  # usage: _eval_run_matches_policy <kind> <policy> <policy_base>
+  local kind="$1"
+  local policy="$2"
+  local base="${3:-}"
+  case "$policy" in
+    smolvla)
+      [[ "$kind" == "smolvla" ]]
+      ;;
+    act|act-jax|gemfuse)
+      [[ "$kind" == "best_val" || "$kind" == "last" || "$kind" == "legacy" ]]
+      ;;
+    hybrid)
+      if [[ "$base" == "smolvla" ]]; then
+        [[ "$kind" == "smolvla" ]]
+      else
+        [[ "$kind" == "best_val" || "$kind" == "last" || "$kind" == "legacy" ]]
+      fi
+      ;;
+    *)
+      return 0
+      ;;
+  esac
 }
 
 _eval_prompt_choice() {
@@ -92,7 +141,19 @@ prompt_eval_options() {
       echo "Dataset not found: data/datasets/$DATASET_NAME/meta.json" >&2
       return 1
     fi
-    POLICY_PATH="${POLICY_PATH:-${CHECKPOINT:-$root/outputs/train/act_${DATASET_NAME}}}"
+    if [[ -z "${POLICY_PATH:-${CHECKPOINT:-}}" ]]; then
+      if [[ "$POLICY" == "smolvla" || ( "$POLICY" == "hybrid" && "${POLICY_BASE:-smolvla}" == "smolvla" ) ]]; then
+        if [[ -d "$root/outputs/train/smolvla_${DATASET_NAME}_v2" ]]; then
+          POLICY_PATH="$root/outputs/train/smolvla_${DATASET_NAME}_v2"
+        else
+          POLICY_PATH="$root/outputs/train/smolvla_${DATASET_NAME}"
+        fi
+      else
+        POLICY_PATH="$root/outputs/train/act_${DATASET_NAME}"
+      fi
+    else
+      POLICY_PATH="${POLICY_PATH:-${CHECKPOINT}}"
+    fi
     if [[ -n "${PROTOCOL+x}" ]]; then
       : # keep PROTOCOL as set (may be empty for timed)
     else
@@ -171,7 +232,7 @@ prompt_eval_options() {
     POLICY_BASE="$(_eval_prompt_choice "Hybrid policy-base" "$POLICY_BASE" "${bases[@]}")"
   fi
 
-  # Checkpoint discovery
+  # Checkpoint discovery (filtered to match selected policy)
   local -a runs=()
   local -a labels=()
   local run kind label
@@ -179,17 +240,28 @@ prompt_eval_options() {
     [[ -z "$run" ]] && continue
     kind="$(_eval_checkpoint_kind "$run")"
     [[ "$kind" == "none" ]] && continue
+    _eval_run_matches_policy "$kind" "$POLICY" "${POLICY_BASE:-}" || continue
     label="$(basename "$run") [$kind]"
     runs+=("$run")
     labels+=("$label")
   done < <(_eval_list_train_runs)
 
   if [[ ${#runs[@]} -eq 0 ]]; then
-    echo "No checkpoints under outputs/train/ — train first (bash scripts/10_train_act.sh)." >&2
+    if [[ "$POLICY" == "smolvla" || ( "$POLICY" == "hybrid" && "${POLICY_BASE:-}" == "smolvla" ) ]]; then
+      echo "No SmolVLA checkpoints under outputs/train/ — train first: bash scripts/14_train_smolvla.sh" >&2
+    else
+      echo "No checkpoints under outputs/train/ — train first (bash scripts/10_train_act.sh)." >&2
+    fi
     return 1
   fi
 
-  local default_run="$root/outputs/train/act_${DATASET_NAME}"
+  local default_run=""
+  if [[ "$POLICY" == "smolvla" || ( "$POLICY" == "hybrid" && "${POLICY_BASE:-}" == "smolvla" ) ]]; then
+    default_run="$root/outputs/train/smolvla_${DATASET_NAME}_v2"
+    [[ -d "$default_run" ]] || default_run="$root/outputs/train/smolvla_${DATASET_NAME}"
+  else
+    default_run="$root/outputs/train/act_${DATASET_NAME}"
+  fi
   local default_label=""
   local i
   for i in "${!runs[@]}"; do
@@ -209,7 +281,7 @@ prompt_eval_options() {
     fi
   done
 
-  # Prefer best_val when present
+  # Prefer best_val when present (ACT); for SmolVLA pick checkpoints/<step>
   kind="$(_eval_checkpoint_kind "$POLICY_PATH")"
   if [[ "$kind" == "best_val" || "$kind" == "last" ]]; then
     local -a weight_opts=()
@@ -224,6 +296,31 @@ prompt_eval_options() {
       # best_val: keep run root so so101 eval resolves best_val/
     elif [[ ${#weight_opts[@]} -eq 1 && "${weight_opts[0]}" == "last" ]]; then
       POLICY_PATH="$POLICY_PATH/last"
+    fi
+  elif [[ "$kind" == "smolvla" ]]; then
+    local -a smol_opts=()
+    local step_dir
+    if [[ -d "$POLICY_PATH/checkpoints" ]]; then
+      for step_dir in "$POLICY_PATH"/checkpoints/*/; do
+        [[ -d "$step_dir" ]] || continue
+        local step_name
+        step_name="$(basename "$step_dir")"
+        [[ "$step_name" == "last" ]] && continue
+        if _eval_is_smolvla_pretrained "$step_dir/pretrained_model"; then
+          smol_opts+=("$step_name")
+        fi
+      done
+      if _eval_is_smolvla_pretrained "$POLICY_PATH/checkpoints/last/pretrained_model"; then
+        smol_opts+=(last)
+      fi
+    fi
+    if [[ ${#smol_opts[@]} -gt 1 ]]; then
+      local pick default_s="last"
+      [[ " ${smol_opts[*]} " == *" last "* ]] || default_s="${smol_opts[-1]}"
+      pick="$(_eval_prompt_choice "Which SmolVLA step under $(basename "$POLICY_PATH")?" "$default_s" "${smol_opts[@]}")"
+      POLICY_PATH="$POLICY_PATH/checkpoints/$pick/pretrained_model"
+    elif [[ ${#smol_opts[@]} -eq 1 ]]; then
+      POLICY_PATH="$POLICY_PATH/checkpoints/${smol_opts[0]}/pretrained_model"
     fi
   fi
 

@@ -257,6 +257,7 @@ def test_grasp_config_roundtrip_track_fields(tmp_path) -> None:
     p.write_text(
         "track_enabled: true\ntrack_roi_frac: 0.55\nlateral_joints: [shoulder_pan]\n"
         "lateral_signs: {shoulder_pan: -1.0}\ngain_deg_per_norm: 6.5\n"
+        "approach_dampen: 0.4\n"
     )
     cfg = load_grasp_config(p)
     assert cfg.track_enabled is True
@@ -264,3 +265,22 @@ def test_grasp_config_roundtrip_track_fields(tmp_path) -> None:
     assert cfg.lateral_joints == ("shoulder_pan",)
     assert cfg.lateral_signs["shoulder_pan"] == -1.0
     assert cfg.gain_deg_per_norm == 6.5
+    assert cfg.approach_dampen == 0.4
+
+
+def test_approach_dampen_slows_idle_arm_deltas() -> None:
+    cfg = DepthGraspConfig(
+        enter_mm=150.0,
+        exit_mm=800.0,
+        approach_dampen=0.25,
+        track_enabled=False,
+        close_gripper=False,
+    )
+    ctrl = DepthGraspController(cfg)
+    state = np.zeros(6, dtype=np.float32)
+    action = np.array([40, -40, 40, 0, 0, 50], dtype=np.float32)
+    out = ctrl.override(action, state, _depth(48, 64, 500))
+    assert ctrl.phase == "idle"
+    # 0.25 * 40 = 10 on pan
+    assert abs(float(out[0]) - 10.0) < 1e-3
+    assert abs(float(out[5]) - 50.0) < 1e-3  # gripper undamped

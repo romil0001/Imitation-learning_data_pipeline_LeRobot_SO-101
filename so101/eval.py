@@ -184,6 +184,7 @@ def _load_eval_policy(
     replan_threshold: int | None = None,
     low_pass_alpha: float | None = None,
     freespace_scale: float | None = None,
+    residual_checkpoint: str = "",
 ) -> Any:
     from so101.algorithms import LoadContext, load_policy
     from so101.recipe import default_gemfuse_recipe_path
@@ -211,6 +212,7 @@ def _load_eval_policy(
         replan_threshold=replan_threshold,
         low_pass_alpha=low_pass_alpha,
         freespace_scale=freespace_scale,
+        residual_checkpoint=residual_checkpoint,
     )
     return load_policy(policy_kind, ctx)
 
@@ -236,6 +238,7 @@ def eval_from_env(
     replan_threshold: int | None = None,
     low_pass_alpha: float | None = None,
     freespace_scale: float | None = None,
+    residual_checkpoint: str = "",
     save_successes: bool = True,
     success_dataset: str = "",
 ) -> int:
@@ -280,12 +283,30 @@ def eval_from_env(
         replan_threshold=replan_threshold,
         low_pass_alpha=low_pass_alpha,
         freespace_scale=freespace_scale,
+        residual_checkpoint=residual_checkpoint,
     )
     use_depth = bool(getattr(getattr(policy_obj, "cfg", None), "use_depth", False))
     depth_name = getattr(getattr(policy_obj, "cfg", None), "depth_camera_name", "wrist")
     ckpt_label = checkpoint or f"{policy}/{policy_base if policy == 'hybrid' else policy}"
     print("EVAL: follower USB + 12V ON. Leader can be OFF. Omen publisher must be streaming.")
-    print(f"Policy kind: {policy}" + (f"  base={policy_base}" if policy == "hybrid" else ""))
+    policy_l = policy.strip().lower()
+    print(f"Policy kind: {policy}" + (f"  base={policy_base}" if policy_l == "hybrid" else ""))
+    if (residual_checkpoint or "").strip() or policy_l in {
+        "residual-rl",
+        "residual_rl",
+        "phase-mix",
+        "phase_mix",
+    }:
+        default_res = (
+            "outputs/train/phase_mix_act"
+            if policy_l in {"phase-mix", "phase_mix"}
+            else "outputs/train/residual_rl_act"
+        )
+        print(f"Residual: {residual_checkpoint or default_res}")
+    if policy_l in {"phase-mix", "phase_mix"}:
+        far = getattr(policy_obj, "far_enter_mm", 280.0)
+        near = getattr(policy_obj, "near_enter_mm", 180.0)
+        print(f"Phases: far d>{far:.0f}mm  mid  near d≤{near:.0f}mm")
     if recipe.strip() or any(
         v is not None
         for v in (n_action_steps, async_replan, replan_threshold, low_pass_alpha, freespace_scale)
@@ -301,7 +322,7 @@ def eval_from_env(
         )
     if use_depth:
         print(f"Depth: {depth_name} uint16 from ZMQ (Omen publisher must not use --no-depth)")
-        if policy == "hybrid":
+        if policy_l in {"hybrid", "phase-mix", "phase_mix"}:
             print(f"Depth grasp: {grasp_config or 'defaults (config/hybrid_grasp.yaml recommended)'}")
     cam_label = ",".join(names)
     if proto_path:

@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from so101.algorithms.loaders import load_act, load_hybrid, load_smolvla, train_act
+from so101.algorithms.loaders import (
+    load_act,
+    load_hybrid,
+    load_phase_mix,
+    load_residual_rl,
+    load_smolvla,
+    train_act,
+)
 from so101.algorithms.registry import Algorithm
 
 
@@ -178,6 +185,39 @@ def builtin_algorithms() -> list[Algorithm]:
             ),
             module="so101.models.smolvla_wrap",
             load=load_smolvla,
+            train=None,
+        ),
+        Algorithm(
+            name="residual-rl",
+            family="ml",
+            summary=(
+                "ACT base + residual SAC with dense wrist-depth rewards "
+                "(center blob, approach target depth, grasp bonus)."
+            ),
+            run=(
+                "train: bash scripts/24_residual_rl.sh\n"
+                "eval:  python -m so101 eval --policy residual-rl "
+                "--residual-checkpoint outputs/train/residual_rl_act"
+            ),
+            module="so101.rl",
+            load=load_residual_rl,
+            train=None,
+        ),
+        Algorithm(
+            name="phase-mix",
+            family="ml",
+            summary=(
+                "Depth-gated mix: far=ACT, mid=ACT+residual SAC, near=depth-grasp. "
+                "SAC learns only in the mid band."
+            ),
+            run=(
+                "train: bash scripts/24_residual_rl.sh\n"
+                "eval:  python -m so101 eval --policy phase-mix "
+                "--residual-checkpoint outputs/train/phase_mix_act "
+                "--grasp-config config/hybrid_grasp.yaml"
+            ),
+            module="so101.rl.phase_mix_policy",
+            load=load_phase_mix,
             train=None,
         ),
     ]

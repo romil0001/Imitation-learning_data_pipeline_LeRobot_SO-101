@@ -46,6 +46,9 @@ class DepthGraspConfig:
     retry_on_miss: int = 1
     depth_confirm: bool = False
     depth_confirm_tol_mm: float = 25.0
+    # While idle with a visible blob (med <= exit_mm), scale base arm deltas
+    # toward current state so ACT cannot overshoot before enter_mm. 1.0 = off.
+    approach_dampen: float = 1.0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DepthGraspConfig:
@@ -91,6 +94,7 @@ class DepthGraspConfig:
             "retry_on_miss": self.retry_on_miss,
             "depth_confirm": self.depth_confirm,
             "depth_confirm_tol_mm": self.depth_confirm_tol_mm,
+            "approach_dampen": self.approach_dampen,
         }
 
 
@@ -237,6 +241,9 @@ class DepthGraspController:
                 # Still nudge laterally while approaching if we see a near-ish blob.
                 if offset_xy is not None and med <= self.cfg.exit_mm:
                     self._apply_lateral(out, state, offset_xy[0])
+                    self._dampen_approach(out, state)
+                elif med <= self.cfg.exit_mm:
+                    self._dampen_approach(out, state)
                 return out
 
         if self.phase == "grasping" and med >= self.cfg.exit_mm:
@@ -265,6 +272,16 @@ class DepthGraspController:
             self._close_left = max(1, int(self.cfg.hold_close_frames))
             return self._force_close(out, state)
         return out
+
+    def _dampen_approach(self, out: np.ndarray, state: np.ndarray) -> None:
+        """Shrink base arm deltas so ACT cannot race past the object before grasp."""
+        scale = float(self.cfg.approach_dampen)
+        if scale >= 0.999:
+            return
+        scale = float(np.clip(scale, 0.05, 1.0))
+        st = np.asarray(state, dtype=np.float32).reshape(-1)
+        n = min(5, out.shape[0], st.shape[0])  # arm joints only; leave gripper
+        out[:n] = st[:n] + scale * (out[:n] - st[:n])
 
     def _apply_lateral(self, out: np.ndarray, state: np.ndarray, offset_x: float) -> None:
         """Steer so the nearest blob moves toward image center (offset_x → 0)."""

@@ -45,6 +45,8 @@ class PseudoDaggerConfig:
     max_delta_deg: float = 5.0
     log_delta_deg: float = 0.35
     blend: float = 1.0
+    # Scale ACT arm deltas toward current state (1.0 = full speed, 0.4 ≈ slow).
+    action_scale: float = 1.0
     close_gripper: bool = False
     gripper_closed: float = 2.0
 
@@ -200,7 +202,13 @@ class PseudoDaggerPolicy:
             raw = self.base.select_action(image_rgb, state, depth_u16=depth_u16)
         except TypeError:
             raw = self.base.select_action(image_rgb, state)
-        out, info = self.servo.correct(np.asarray(raw, dtype=np.float32), state, depth_u16)
+        raw = np.asarray(raw, dtype=np.float32).reshape(-1).copy()
+        st = np.asarray(state, dtype=np.float32).reshape(-1)
+        scale = float(np.clip(float(self.servo.cfg.action_scale), 0.05, 1.0))
+        if scale < 0.999:
+            n = min(5, raw.shape[0], st.shape[0])
+            raw[:n] = st[:n] + scale * (raw[:n] - st[:n])
+        out, info = self.servo.correct(raw, st, depth_u16)
         self.last_info = info
         return out
 

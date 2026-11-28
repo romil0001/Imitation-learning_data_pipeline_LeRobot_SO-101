@@ -34,6 +34,7 @@ class LoadContext:
     replan_threshold: int | None = None
     low_pass_alpha: float | None = None
     freespace_scale: float | None = None
+    residual_checkpoint: str = ""
 
 
 @dataclass(frozen=True)

@@ -14,23 +14,25 @@ max_mm: 2000.0
 # Blob tracking ROI / band (same semantics as hybrid_grasp.yaml).
 track_roi_frac: 0.75
 track_band_mm: 50.0
-# Lateral: image offset_x in [-1,1] → degrees on shoulder_pan.
-gain_deg_per_norm: 10.0
+# Lateral: image offset_x in [-1,1] → degrees on shoulder_pan (gentler; was 10).
+gain_deg_per_norm: 4.0
 lateral_joints: [shoulder_pan]
 lateral_signs:
   # Flip to -1.0 if the arm pans away from the blob.
   shoulder_pan: 1.0
 # Vertical: (depth - target_mm) → degrees on lift joints.
-gain_deg_per_mm: 0.06
+gain_deg_per_mm: 0.03
 vertical_joints: [shoulder_lift, elbow_flex]
 joint_signs:
   shoulder_lift: 1.0
   elbow_flex: 1.0
-max_delta_deg: 5.0
+max_delta_deg: 1.5
 # Only log a frame when ||a* - a_ACT||_inf exceeds this (degrees).
 log_delta_deg: 0.35
 # Blend: 1.0 = full overwrite of corrected joints; 0.5 = half ACT / half servo.
-blend: 1.0
+blend: 0.6
+# Slow ACT during collection (arm deltas × this toward current pose). 1.0 = full speed.
+action_scale: 0.25
 # Close gripper when near target (optional; usually leave false while collecting).
 close_gripper: false
 gripper_closed: 2.0
